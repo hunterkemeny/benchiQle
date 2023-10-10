@@ -3,7 +3,7 @@
 
 Aspiring to be a comprehensive benchmarking tool for quantum compilers.
 
-Currently runs the max_depth metric from QASMBench on the ft_circuit_1 from red-queen.
+Currently runs the max_depth metric from QASMBench on the ft_circuit_1 benchmark from red-queen.
 
 Simply run `python3 runner.py` from the command line. 
 
