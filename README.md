@@ -1,4 +1,5 @@
 # benchiQle
+(pronounced "ben-cha-cuhl")
 
 Aspiring to be a comprehensive benchmarking tool for quantum compilers.
 
