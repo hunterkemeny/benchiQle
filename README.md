@@ -3,8 +3,8 @@
 
 Aspiring to be a comprehensive benchmarking tool for quantum compilers.
 
-Currently runs the max_depth metric from QASMBench on the ft_circuit_1 benchmark from red-queen.
+Currently runs the max_depth, speed, and memory footprint metrics on all benchmarks from red-queen that do not have "gate" in their qasm file.
 
-Simply run `python3 runner.py` from the command line. 
+Simply run `./run.sh` from the command line. 
 
 Stay tuned for more benchmarks, more metrics, more compiler options to be run from the command line or jupyter notebooks.
