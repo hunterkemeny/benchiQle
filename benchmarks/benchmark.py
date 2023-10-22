@@ -116,7 +116,6 @@ class Benchmark:
         :param line: Line of QASM code
         :return: Qubits being used in the line of QASM code
         """
-        print(line)
         line = line.strip(';')
         op_qubits = line.split(" ")[1].strip().split(',')
         qubit_ids = []

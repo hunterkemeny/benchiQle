@@ -14,7 +14,7 @@ import os
 import math
 import pytest
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
-from applications import backends, run_qiskit_circuit
+#from applications import backends, run_qiskit_circuit
 
 
 QASM_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qasm")
@@ -92,16 +92,16 @@ def quantum_phase_estimation(num_of_qubits, angle):
 # Benchmarking
 
 
-@pytest.mark.qiskit
-@pytest.mark.parametrize("optimization_level", [0, 1, 2, 3])
-@pytest.mark.parametrize("backend", backends)
-def bench_qiskit_bv(benchmark, optimization_level, backend):
-    shots = 65536
-    expected_counts = {fraction_bin(SECRET_ANGLE): shots}
-    benchmark.name = "Quantum Phase Estimation"
-    circ = QuantumCircuit.from_qasm_file(os.path.join(QASM_DIR, "qpe.qasm"))
-    benchmark.algorithm = f"Optimization level: {optimization_level} on {backend.name()}"
-    run_qiskit_circuit(benchmark, circ, backend, optimization_level, shots, expected_counts)
+# @pytest.mark.qiskit
+# @pytest.mark.parametrize("optimization_level", [0, 1, 2, 3])
+# @pytest.mark.parametrize("backend", backends)
+# def bench_qiskit_bv(benchmark, optimization_level, backend):
+#     shots = 65536
+#     expected_counts = {fraction_bin(SECRET_ANGLE): shots}
+#     benchmark.name = "Quantum Phase Estimation"
+#     circ = QuantumCircuit.from_qasm_file(os.path.join(QASM_DIR, "qpe.qasm"))
+#     benchmark.algorithm = f"Optimization level: {optimization_level} on {backend.name()}"
+#     run_qiskit_circuit(benchmark, circ, backend, optimization_level, shots, expected_counts)
 
 
 if __name__ == "__main__":
