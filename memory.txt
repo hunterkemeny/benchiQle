@@ -2,60 +2,59 @@ Filename: /Users/hunterkemeny/Desktop/benchiQle/runner.py
 
 Line #    Mem usage    Increment  Occurrences   Line Contents
 =============================================================
-   102    126.9 MiB    126.9 MiB           1       @profile
-   103                                             def transpile_in_process(self, benchmark, optimization_level):
-   104    161.2 MiB     34.3 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
-   105    161.2 MiB      0.0 MiB           1           return transpiled_circuit
+   153    707.8 MiB    707.8 MiB           1       @profile
+   154                                             def transpile_in_process(self, benchmark, optimization_level):
+   155    715.2 MiB      7.4 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
+   156    715.2 MiB      0.0 MiB           1           return transpiled_circuit
 
 
 Filename: /Users/hunterkemeny/Desktop/benchiQle/runner.py
 
 Line #    Mem usage    Increment  Occurrences   Line Contents
 =============================================================
-   102    126.2 MiB    126.2 MiB           1       @profile
-   103                                             def transpile_in_process(self, benchmark, optimization_level):
-   104    160.1 MiB     33.8 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
-   105    160.1 MiB      0.0 MiB           1           return transpiled_circuit
+   153    682.4 MiB    682.4 MiB           1       @profile
+   154                                             def transpile_in_process(self, benchmark, optimization_level):
+   155    690.6 MiB      8.2 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
+   156    690.6 MiB      0.0 MiB           1           return transpiled_circuit
 
 
 Filename: /Users/hunterkemeny/Desktop/benchiQle/runner.py
 
 Line #    Mem usage    Increment  Occurrences   Line Contents
 =============================================================
-   102    126.8 MiB    126.8 MiB           1       @profile
-   103                                             def transpile_in_process(self, benchmark, optimization_level):
-   104    160.2 MiB     33.5 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
-   105    160.2 MiB      0.0 MiB           1           return transpiled_circuit
+   153    687.1 MiB    687.1 MiB           1       @profile
+   154                                             def transpile_in_process(self, benchmark, optimization_level):
+   155    698.9 MiB     11.8 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
+   156    698.9 MiB      0.0 MiB           1           return transpiled_circuit
 
 
 Filename: /Users/hunterkemeny/Desktop/benchiQle/runner.py
 
 Line #    Mem usage    Increment  Occurrences   Line Contents
 =============================================================
-   102    126.2 MiB    126.2 MiB           1       @profile
-   103                                             def transpile_in_process(self, benchmark, optimization_level):
-   104    164.6 MiB     38.3 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
-   105    164.6 MiB      0.0 MiB           1           return transpiled_circuit
+   153    673.9 MiB    673.9 MiB           1       @profile
+   154                                             def transpile_in_process(self, benchmark, optimization_level):
+   155    683.2 MiB      9.3 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
+   156    683.2 MiB      0.0 MiB           1           return transpiled_circuit
 
 
 Filename: /Users/hunterkemeny/Desktop/benchiQle/runner.py
 
 Line #    Mem usage    Increment  Occurrences   Line Contents
 =============================================================
-   102    127.1 MiB    127.1 MiB           1       @profile
-   103                                             def transpile_in_process(self, benchmark, optimization_level):
-   104    163.6 MiB     36.5 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
-   105    163.6 MiB      0.0 MiB           1           return transpiled_circuit
+   153    669.7 MiB    669.7 MiB           1       @profile
+   154                                             def transpile_in_process(self, benchmark, optimization_level):
+   155    680.6 MiB     10.9 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
+   156    680.6 MiB      0.0 MiB           1           return transpiled_circuit
 
 
 Filename: /Users/hunterkemeny/Desktop/benchiQle/runner.py
 
 Line #    Mem usage    Increment  Occurrences   Line Contents
 =============================================================
-   102    125.5 MiB    125.5 MiB           1       @profile
-   103                                             def transpile_in_process(self, benchmark, optimization_level):
-   104    159.5 MiB     34.0 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
-   105    159.5 MiB      0.0 MiB           1           return transpiled_circuit
+   153    680.6 MiB    680.6 MiB           1       @profile
+   154                                             def transpile_in_process(self, benchmark, optimization_level):
+   155    687.0 MiB      6.4 MiB           1           transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
+   156    687.0 MiB      0.0 MiB           1           return transpiled_circuit
 
 
-{'memory_footprint': [34.3, 33.8, 33.5, 38.3, 36.5, 34.0], 'speed': 0.12708711624145508, 'depth': 47}

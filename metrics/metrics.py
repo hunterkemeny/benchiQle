@@ -1,5 +1,4 @@
 class Metrics:
-    # TODO: implement metrics for speed, quality (other than depth), and memory_footprint
 
     # def __init__(self, metric):
     #     self.metric = metric

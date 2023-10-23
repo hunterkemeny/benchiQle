@@ -3,34 +3,50 @@ import sys
 import io
 
 from benchmarks.benchmark import Benchmark
+from benchmarks.benchmark import small_qasm
+from benchmarks.benchmark import medium_qasm
+from benchmarks.benchmark import large_qasm
 # For benchmarks that are created with qiskit, import them here
-from benchmarks.run_ft import generate_ft_circuit_1, generate_ft_circuit_2
-from benchmarks.run_bv import build_bv_circuit
-from benchmarks.run_ipe import build_ipe
-from benchmarks.run_qpe import quantum_phase_estimation
+from benchmarks.red_queen.run_ft import generate_ft_circuit_1, generate_ft_circuit_2
+from benchmarks.red_queen.run_bv import build_bv_circuit
+from benchmarks.red_queen.run_ipe import build_ipe
+from benchmarks.red_queen.run_qpe import quantum_phase_estimation
 from metrics.metrics import Metrics
 from qiskit import *
 from qiskit.providers.fake_provider import FakeWashingtonV2
 import json
-import logging
 import time
 from memory_profiler import profile
-from memory_profiler import memory_usage
-from memory_profiler import LineProfiler
 from contextlib import redirect_stdout
-import gc
-import tracemalloc
 import multiprocessing
+import logging
+
+logger = logging.getLogger('my_logger')
+logger.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+logger.addHandler(console_handler)
+
+# TODO list: 1. add remaining useful benchmarks from Red Queen (for solving the "gate" problem in red_queen, see Matthew's code)
+#            2. Add aggregate statistics and postprocessing
+#            3. Add support for other versions of qiskit
+#            4. compilers (ptket, cirq, etc.)
+#            5. Clean up code, add comments, go thru remainder of todos
+#            6. Add examples
 
 class Runner:
-    # TODO: Currently have tested one benchmark with one metric running with 
-    #       the ability to choose transpiler option 
-    def __init__(self, benchmark_list: list, metric_list: list, compiler_dict: dict, backend: str):
+    # TODO: Currently can only choose one transpiler option from only qiskit (no comparison); also add different versions
+    # TODO: add functionality for running ptket transpilation and also cirq (do this after qiskit version comparisons, aggregate metrics, and adding more benchmarks)
+
+    def __init__(self, provided_benchmarks: list, metric_list: list, compiler_dict: dict, backend: str, num_runs: int):
         """
-        :benchmark_list: list of benchmarks to be used --> [benchmark_name]
+        :provided_benchmarks: list of benchmarks to be used --> [benchmark_name]
         :param metrics: list of metrics to be used --> [metric_name]
         :param compiler_dict: dictionary of compiler info --> {"compiler": "COMPILER_NAME", "version": "VERSION NUM", "optimization_level": OPTIMIZATION_LEVEL}
         :param backend: name of backend to be used --> "BACKEND_NAME"
+        :param num_runs: number of times to run each benchmark
         """
         # TODO: add support for qasm strings that have the "gate" keyword
         # TODO: rename these
@@ -43,17 +59,19 @@ class Runner:
             "qpe"
         ]
         
-        self.benchmark_list = benchmark_list
+        self.provided_benchmarks = provided_benchmarks
         self.metric_list = metric_list
         self.compiler_dict = compiler_dict
         self.backend = backend
+        self.num_runs = num_runs
 
+        self.full_benchmark_list = []
         self.metric_data = {}
 
         self.preprocess_benchmarks()
 
     def get_qasm_benchmark(self, qasm_name):
-        with open("./benchmarks/qasm/" + f"{qasm_name}", "r") as f:
+        with open("./benchmarks/" + f"{qasm_name}", "r") as f:
             qasm = f.read()
         return qasm
     
@@ -61,43 +79,76 @@ class Runner:
         """
         Preprocess benchmarks before running them. 
         """
-        for benchmark in self.benchmark_list:
-            if benchmark[-5:] == ".qasm":
-                # Transform benchmark from qasm string to qiskit circuit
-                # TODO: figure out if converting from qasm str to qiskit circuit and back to qasm with different
-                #       transpiler options is useful.
-                qasm = self.get_qasm_benchmark(benchmark)
-                qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
-                self.benchmark_list[self.benchmark_list.index(benchmark)] = qiskit_circuit
+        for benchmark in self.provided_benchmarks:
+            # Should allow for both qasm string inputs and qiskit circuit inputs, 
+            # but should just run benchmarks on the transpile/compile operations
+            
+            if benchmark == "small":
+                logger.info("small_qasm: Converting from QASM into Qiskit circuits...")
+                for qasm_name in small_qasm:
+                    logger.info("Converting: " + qasm_name)
+                    qasm = self.get_qasm_benchmark("small_qasm/" + qasm_name)
+                    qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
+                    self.full_benchmark_list.append(qiskit_circuit)
+
+            elif benchmark == "medium":
+                logger.info("medium_qasm: Converting from QASM into Qiskit circuits...")
+                for qasm_name in medium_qasm:
+                    logger.info("Converting: " + qasm_name)
+                    qasm = self.get_qasm_benchmark("medium_qasm/" + qasm_name)
+                    qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
+                    self.full_benchmark_list.append(qiskit_circuit)
+            
+            elif benchmark == "large":
+                logger.info("large_qasm: Converting from QASM into Qiskit circuits...")
+                for qasm_name in large_qasm:
+                    logger.info("Converting: " + qasm_name)
+                    qasm = self.get_qasm_benchmark("large_qasm/" + qasm_name)
+                    qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
+                    self.full_benchmark_list.append(qiskit_circuit)
+            
+            # TODO: add suport for red-queen qasm benchmarks
+            # elif benchmark[-5:] == ".qasm":
+            #     qasm = self.get_qasm_benchmark(benchmark)
+            #     qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
+            #     self.full_benchmark_list.append(qiskit_circuit)
             elif benchmark not in self.ALLOWED_QISKIT_BENCHMARKS:
                 raise Exception(f"Invalid benchmark name: {benchmark}")
             else:
                 # TODO: generalize inputs to these functions
-                # TODO: Is there a way to make this more modular?
+                # TODO: Is there a way to make this more modular? Maybe just have sets of benchmarks here (e.g. small, red-queen) instead of setting each one
                 if benchmark == "ft_circuit_1":
-                    self.benchmark_list[self.benchmark_list.index(benchmark)] = generate_ft_circuit_1("11111111")
+                    self.full_benchmark_list.append(generate_ft_circuit_1("11111111"))
                 elif benchmark == "ft_circuit_2":
-                    self.benchmark_list[self.benchmark_list.index(benchmark)] = generate_ft_circuit_2("11111111")
+                    self.full_benchmark_list.append(generate_ft_circuit_2("11111111"))
                 elif benchmark == "bv_mcm":
-                    self.benchmark_list[self.benchmark_list.index(benchmark)] = build_bv_circuit("110011", True)
+                    self.full_benchmark_list.append(build_bv_circuit("110011", True))
                 elif benchmark == "bv":
-                    self.benchmark_list[self.benchmark_list.index(benchmark)] = build_bv_circuit("110011")
+                    self.full_benchmark_list.append(build_bv_circuit("110011"))
                 elif benchmark == "ipe":
-                    self.benchmark_list[self.benchmark_list.index(benchmark)] = quantum_phase_estimation(4, 1/8)
+                    self.full_benchmark_list.append(quantum_phase_estimation(4, 1/8))
                 elif benchmark == "qpe":
-                    self.benchmark_list[self.benchmark_list.index(benchmark)] = build_ipe(4, 1/16)
+                    self.full_benchmark_list.append(build_ipe(4, 1/16))
+
 
     def run_benchmarks(self):
         """
-        Run all benchmarks in benchmark_list.
+        Run all benchmarks in full_benchmark_list.
         """
-        # TODO: implement JSON for storing metric information.
-        #       should have object for each individual benchmark along with
-        #       an aggregate object for all benchmarks.
+        # TODO: perform aggregate statistics on metric_data with multiple runs (mean, median, range, variance)
+        # TODO: figure out if these extra classes are necessary
         metrics = Metrics()
-        for benchmark in self.benchmark_list:
+        counter = 1
+        for benchmark in self.full_benchmark_list:
+            logger.info("Running benchmark " + str(counter) + " of " + str(len(self.full_benchmark_list)) + "...")
             self.run_benchmark(benchmark, metrics)
-        # TODO: perform aggregate statistics on metric_data and save to reports in JSON file
+            counter += 1
+        
+        # TODO: Add functionality for red_queen and qasm_bench benchmarks (e.g. sabre)
+        with open('metrics.json', 'w') as json_file:
+            json.dump(self.metric_data, json_file)
+
+        # TODO postprocess metrics to include units and improve formatting
 
     @profile
     def transpile_in_process(self, benchmark, optimization_level):
@@ -133,10 +184,10 @@ class Runner:
         """
         # TODO: Create functionality for providing user benchmark in other languages (e.g. cirq)
 
-        # TODO Add progress status so the terminal isn't simply blank
+        # TODO Add progress status so the terminal isn't blank
         # TODO add variables to running the script so the user can decide benchmarks and metrics from the command line
-        #       also add 
         if "memory_footprint" in self.metric_list:
+            logger.info("Calculating memory footprint...")
             # Multiprocesss transpilation to get accurate memory usage
             self.profile_func(benchmark)
             # Replace this with the path to your file
@@ -148,6 +199,7 @@ class Runner:
             self.metric_data['memory_footprint'] = memory_data
 
         if "speed" in self.metric_list:
+            logger.info("Calculating speed...")
             # to get accurate time measurement, need to run transpilation without profiling
             start_time = time.time()
             transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=0)
@@ -155,6 +207,7 @@ class Runner:
             self.metric_data["speed"] = end_time - start_time
         
         if "depth" in self.metric_list:
+            logger.info("Calculating depth...")
             qasm_string = transpiled_circuit.qasm()
             benchmark = Benchmark(qasm_string)
             depth = metrics.get_circuit_depth(benchmark)
@@ -162,12 +215,13 @@ class Runner:
         
 
 if __name__ == "__main__":
-    runner = Runner(["ft_circuit_1", "ft_circuit_2", "bv_mcm", "bv", "ipe", "qpe"], 
+    logger.debug("hello")
+    runner = Runner(["small"], 
                     ["depth", "speed", "memory_footprint"], 
                     {"compiler": "qiskit", "version": "10.2.0", "optimization_level": 0},
-                    "qasm_simulator")
+                    "qasm_simulator",
+                    1)
     runner.run_benchmarks()
-    print(runner.metric_data)
 
 
 
