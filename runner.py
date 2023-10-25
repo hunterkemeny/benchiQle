@@ -20,6 +20,7 @@ from memory_profiler import profile
 from contextlib import redirect_stdout
 import multiprocessing
 import logging
+import numpy as np
 
 logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
@@ -30,16 +31,20 @@ console_handler.setLevel(logging.INFO)
 logger.addHandler(console_handler)
 
 # TODO list: 1. add remaining useful benchmarks from Red Queen (for solving the "gate" problem in red_queen, see Matthew's code)
-#            2. Add aggregate statistics and postprocessing
 #            3. Add support for other versions of qiskit
 #            4. compilers (ptket, cirq, etc.)
-#            5. Clean up code, add comments, go thru remainder of todos
-#            6. Add examples
+#            5. Look at Luciano's message from a few weeks ago and run with those paramas
+#            6. Improve on logger output
+#            7. Clean up code, add comments, go thru remainder of todos
+#            8. Add examples
+#            9. Add graphs from luciano's file
 
 class Runner:
     # TODO: Currently can only choose one transpiler option from only qiskit (no comparison); also add different versions
     # TODO: add functionality for running ptket transpilation and also cirq (do this after qiskit version comparisons, aggregate metrics, and adding more benchmarks)
-
+    
+    # TODO: metric_data should be structured as follows:
+    #       top: benchmark name --> compiler version --> run number/aggregate --> metric name --> metric value
     def __init__(self, provided_benchmarks: list, metric_list: list, compiler_dict: dict, backend: str, num_runs: int):
         """
         :provided_benchmarks: list of benchmarks to be used --> [benchmark_name]
@@ -65,6 +70,8 @@ class Runner:
         self.backend = backend
         self.num_runs = num_runs
 
+        # TODO: make num_runs a dictionary element for each benchmark
+
         self.full_benchmark_list = []
         self.metric_data = {}
 
@@ -89,7 +96,10 @@ class Runner:
                     logger.info("Converting: " + qasm_name)
                     qasm = self.get_qasm_benchmark("small_qasm/" + qasm_name)
                     qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
-                    self.full_benchmark_list.append(qiskit_circuit)
+                    self.full_benchmark_list.append({qasm_name: qiskit_circuit})
+                    # TODO: improve the logic of this so that we iterate thru the metric_data dict to 
+                    # populate these. And this same logic should be applied in run_benchmark
+                    self.metric_data[qasm_name] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
 
             elif benchmark == "medium":
                 logger.info("medium_qasm: Converting from QASM into Qiskit circuits...")
@@ -97,7 +107,8 @@ class Runner:
                     logger.info("Converting: " + qasm_name)
                     qasm = self.get_qasm_benchmark("medium_qasm/" + qasm_name)
                     qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
-                    self.full_benchmark_list.append(qiskit_circuit)
+                    self.full_benchmark_list.append({qasm_name: qiskit_circuit})
+                    self.metric_data[qasm_name] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
             
             elif benchmark == "large":
                 logger.info("large_qasm: Converting from QASM into Qiskit circuits...")
@@ -105,7 +116,8 @@ class Runner:
                     logger.info("Converting: " + qasm_name)
                     qasm = self.get_qasm_benchmark("large_qasm/" + qasm_name)
                     qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
-                    self.full_benchmark_list.append(qiskit_circuit)
+                    self.full_benchmark_list.append({qasm_name: qiskit_circuit})
+                    self.metric_data[qasm_name] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
             
             # TODO: add suport for red-queen qasm benchmarks
             # elif benchmark[-5:] == ".qasm":
@@ -117,20 +129,27 @@ class Runner:
             else:
                 # TODO: generalize inputs to these functions
                 # TODO: Is there a way to make this more modular? Maybe just have sets of benchmarks here (e.g. small, red-queen) instead of setting each one
+                #           could iterate over ALLOWED_QISKIT_BENCHMARKS and just check if benchmark is in that list
                 if benchmark == "ft_circuit_1":
-                    self.full_benchmark_list.append(generate_ft_circuit_1("11111111"))
+                    self.full_benchmark_list.append({"ft_circuit_1": generate_ft_circuit_1("11111111")})
+                    self.metric_data["ft_circuit_1"] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
                 elif benchmark == "ft_circuit_2":
-                    self.full_benchmark_list.append(generate_ft_circuit_2("11111111"))
+                    self.full_benchmark_list.append({"ft_circuit_2": generate_ft_circuit_2("11111111")})
+                    self.metric_data["ft_circuit_2"] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
                 elif benchmark == "bv_mcm":
-                    self.full_benchmark_list.append(build_bv_circuit("110011", True))
+                    self.full_benchmark_list.append({"bv_mcm": build_bv_circuit("110011", True)})
+                    self.metric_data["bv_mcm"] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
                 elif benchmark == "bv":
-                    self.full_benchmark_list.append(build_bv_circuit("110011"))
+                    self.full_benchmark_list.append({"bv": build_bv_circuit("110011")})
+                    self.metric_data["bv"] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
                 elif benchmark == "ipe":
-                    self.full_benchmark_list.append(quantum_phase_estimation(4, 1/8))
+                    self.full_benchmark_list.append({"ipe": quantum_phase_estimation(4, 1/8)})
+                    self.metric_data["ipe"] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
                 elif benchmark == "qpe":
-                    self.full_benchmark_list.append(build_ipe(4, 1/16))
+                    self.full_benchmark_list.append({"qpe": build_ipe(4, 1/16)})
+                    self.metric_data["qpe"] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
 
-
+    
     def run_benchmarks(self):
         """
         Run all benchmarks in full_benchmark_list.
@@ -138,15 +157,20 @@ class Runner:
         # TODO: perform aggregate statistics on metric_data with multiple runs (mean, median, range, variance)
         # TODO: figure out if these extra classes are necessary
         metrics = Metrics()
-        counter = 1
+        logger_counter = 1
         for benchmark in self.full_benchmark_list:
-            logger.info("Running benchmark " + str(counter) + " of " + str(len(self.full_benchmark_list)) + "...")
-            self.run_benchmark(benchmark, metrics)
-            counter += 1
-        
-        # TODO: Add functionality for red_queen and qasm_bench benchmarks (e.g. sabre)
+            
+            for run in range(self.num_runs):
+                logger.info("Running benchmark " + str(logger_counter) + " of " + str(self.num_runs*len(self.full_benchmark_list)) + "...")
+                self.run_benchmark(benchmark, metrics, run)
+                logger_counter += 1
+            
+            self.postprocess_metrics(benchmark)
+
         with open('metrics.json', 'w') as json_file:
             json.dump(self.metric_data, json_file)
+
+        
 
         # TODO postprocess metrics to include units and improve formatting
 
@@ -162,7 +186,8 @@ class Runner:
         return circuit
     
     def extract_memory_increments(self, filename, target_line):
-        increments = []
+        #increments = []
+        # TODO: optimize this function
         with open(filename, 'r') as f:
             lines = f.readlines()
             # Flag to check if the line with memory details is next
@@ -171,11 +196,11 @@ class Runner:
                     parts = line.split()
                     if len(parts) > 3:  # Check to ensure the line has enough columns
                         increment_value = float(parts[3])  # The "Increment" value is in the 4th column
-                        increments.append(increment_value)
-        return increments
+                        #increments.append(increment_value)
+        return increment_value
 
         
-    def run_benchmark(self, benchmark, metrics):
+    def run_benchmark(self, benchmark, metrics, run):
         """
         Run a single benchmark.
 
@@ -186,41 +211,76 @@ class Runner:
 
         # TODO Add progress status so the terminal isn't blank
         # TODO add variables to running the script so the user can decide benchmarks and metrics from the command line
-        if "memory_footprint" in self.metric_list:
+        benchmark_name = list(benchmark.keys())[0]
+        benchmark_circuit = list(benchmark.values())[0]
+        # This line is resetting the dictionary. Should be adding to it instead
+
+        # TODO: fix the logic here: the circuit will HAVE to be transpiled, 
+        #       and there seems to be no reason NOT to collect time data. 
+        #       So this should always be run at the top, and the option should
+        #       be to DISPLAY (add to metric_data) rather than whether to RUN it.
+        
+        if "memory_footprint (MiB)" in self.metric_list:
+            # Add memory_footprint to dictionary corresponding to this benchmark
+            
             logger.info("Calculating memory footprint...")
             # Multiprocesss transpilation to get accurate memory usage
-            self.profile_func(benchmark)
+            self.profile_func(benchmark_circuit)
             # Replace this with the path to your file
             filename = 'memory.txt'
             # Replace this with the line you are targeting
             target_line = "transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level)"
             memory_data = self.extract_memory_increments(filename, target_line)
+            # TODO: determine if units should be added here or in postprocessing
+            self.metric_data[benchmark_name]["memory_footprint (MiB)"].append(memory_data)
 
-            self.metric_data['memory_footprint'] = memory_data
-
-        if "speed" in self.metric_list:
+        if "speed (seconds)" in self.metric_list:
             logger.info("Calculating speed...")
             # to get accurate time measurement, need to run transpilation without profiling
             start_time = time.time()
-            transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=0)
+            transpiled_circuit = transpile(benchmark_circuit, backend=FakeWashingtonV2(), optimization_level=0)
             end_time = time.time()
-            self.metric_data["speed"] = end_time - start_time
+            self.metric_data[benchmark_name]["speed (seconds)"].append(end_time - start_time)
         
-        if "depth" in self.metric_list:
+        if "depth (gates)" in self.metric_list:
             logger.info("Calculating depth...")
             qasm_string = transpiled_circuit.qasm()
-            benchmark = Benchmark(qasm_string)
-            depth = metrics.get_circuit_depth(benchmark)
-            self.metric_data["depth"] = depth
-        
+            processed_qasm = Benchmark(qasm_string)
+            depth = metrics.get_circuit_depth(processed_qasm)
+            self.metric_data[benchmark_name]["depth (gates)"].append(depth)
+    
+    def postprocess_metrics(self, benchmark):
+        """
+        Postprocess metrics to include aggregate statistics.
+        """
+        # For each metric, calculate mean, median, range, variance, standard dev
+
+        # aggregate:
+        #   metric name --> aggregate statistics --> value
+        # TODO: turn array into np array first, then do calculations
+        benchmark_name = list(benchmark.keys())[0]
+        self.metric_data[benchmark_name]["aggregate"] = {}
+        for metric in self.metric_list:
+            self.metric_data[benchmark_name]["aggregate"][metric] = {}
+            logger.info(self.metric_data[benchmark_name])
+
+            self.metric_data[benchmark_name]["aggregate"][metric]["mean"] = np.mean(np.array(self.metric_data[benchmark_name][metric], dtype=float))
+            self.metric_data[benchmark_name]["aggregate"][metric]["median"] = np.median(np.array(self.metric_data[benchmark_name][metric], dtype=float))
+            self.metric_data[benchmark_name]["aggregate"][metric]["range"] = (np.min(np.array(self.metric_data[benchmark_name][metric], dtype=float)), np.max(np.array(self.metric_data[benchmark_name][metric], dtype=float)))
+            self.metric_data[benchmark_name]["aggregate"][metric]["variance"] = np.var(np.array(self.metric_data[benchmark_name][metric], dtype=float))
+            self.metric_data[benchmark_name]["aggregate"][metric]["standard_deviation"] = np.std(np.array(self.metric_data[benchmark_name][metric], dtype=float))              
+
+        logger.info(self.metric_data)
+
+
 
 if __name__ == "__main__":
     logger.debug("hello")
-    runner = Runner(["small"], 
-                    ["depth", "speed", "memory_footprint"], 
+    runner = Runner(["ft_circuit_1", "ft_circuit_2"], 
+                    ["depth (gates)", "speed (seconds)", "memory_footprint (MiB)"], 
                     {"compiler": "qiskit", "version": "10.2.0", "optimization_level": 0},
                     "qasm_simulator",
-                    1)
+                    2)
     runner.run_benchmarks()
 
 
