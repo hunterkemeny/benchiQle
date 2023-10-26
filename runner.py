@@ -13,7 +13,9 @@ from benchmarks.red_queen.run_ipe import build_ipe
 from benchmarks.red_queen.run_qpe import quantum_phase_estimation
 from metrics.metrics import Metrics
 from qiskit import *
+# TODO: should this be V2 or just FakeWashington
 from qiskit.providers.fake_provider import FakeWashingtonV2
+from qiskit.circuit.library import *
 import json
 import time
 from memory_profiler import profile
@@ -31,13 +33,16 @@ console_handler.setLevel(logging.INFO)
 logger.addHandler(console_handler)
 
 # TODO list: 1. add remaining useful benchmarks from Red Queen (for solving the "gate" problem in red_queen, see Matthew's code)
-#            3. Add support for other versions of qiskit
-#            4. compilers (ptket, cirq, etc.)
-#            5. Look at Luciano's message from a few weeks ago and run with those paramas
+#            2. Allow the user to choose which benchmarks and metrics to run on command line and as an import
+#            3.  format the output of json files so that the title of the file mentions the compiler name that is being used (probably don't need the user to input this information, can get versioning in python)
+
+#            4. Add support for other compilers (ptket, cirq, etc.)
+#            5.* Look at Luciano's message from a few weeks ago and run with those params (take a look at routing difficulty)
+#            8.* Add examples
+#            9.* Add graphs from luciano's file
+
 #            6. Improve on logger output
 #            7. Clean up code, add comments, go thru remainder of todos
-#            8. Add examples
-#            9. Add graphs from luciano's file
 
 class Runner:
     # TODO: Currently can only choose one transpiler option from only qiskit (no comparison); also add different versions
@@ -61,7 +66,8 @@ class Runner:
             "bv_mcm",
             "bv",
             "ipe",
-            "qpe"
+            "qpe",
+            "EfficientSU2"
         ]
         
         self.provided_benchmarks = provided_benchmarks
@@ -148,8 +154,16 @@ class Runner:
                 elif benchmark == "qpe":
                     self.full_benchmark_list.append({"qpe": build_ipe(4, 1/16)})
                     self.metric_data["qpe"] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
+                elif benchmark == "EfficientSU2":
+                    circuit = EfficientSU2(100, su2_gates=['rx'], entanglement='circular', reps=1)
+                    params = circuit.parameters
+                    # Does value of pi/4 make sense here?
+                    values = [np.pi/4]*len(params)
+                    binding = {param: value for param, value in zip(params, values)}
+                    circuit = circuit.bind_parameters(binding)
+                    self.full_benchmark_list.append({"EfficientSU2": circuit})
+                    self.metric_data["EfficientSU2"] = {"speed (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
 
-    
     def run_benchmarks(self):
         """
         Run all benchmarks in full_benchmark_list.
@@ -262,7 +276,6 @@ class Runner:
         self.metric_data[benchmark_name]["aggregate"] = {}
         for metric in self.metric_list:
             self.metric_data[benchmark_name]["aggregate"][metric] = {}
-            logger.info(self.metric_data[benchmark_name])
 
             self.metric_data[benchmark_name]["aggregate"][metric]["mean"] = np.mean(np.array(self.metric_data[benchmark_name][metric], dtype=float))
             self.metric_data[benchmark_name]["aggregate"][metric]["median"] = np.median(np.array(self.metric_data[benchmark_name][metric], dtype=float))
@@ -276,11 +289,11 @@ class Runner:
 
 if __name__ == "__main__":
     logger.debug("hello")
-    runner = Runner(["ft_circuit_1", "ft_circuit_2"], 
+    runner = Runner(["EfficientSU2"], 
                     ["depth (gates)", "speed (seconds)", "memory_footprint (MiB)"], 
                     {"compiler": "qiskit", "version": "10.2.0", "optimization_level": 0},
                     "qasm_simulator",
-                    2)
+                    10)
     runner.run_benchmarks()
 
 
