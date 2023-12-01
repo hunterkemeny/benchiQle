@@ -1,6 +1,7 @@
 # TODO: add __init__.py to all folders
 import sys
 import io
+import statistics
 
 from benchmarks.benchmark import Benchmark
 from benchmarks.benchmark import small_qasm
@@ -13,6 +14,7 @@ from benchmarks.red_queen.run_ipe import build_ipe
 from benchmarks.red_queen.run_qpe import quantum_phase_estimation
 from metrics.metrics import Metrics
 from qiskit import *
+from qiskit.circuit import Parameter
 # TODO: should this be V2 or just FakeWashington
 from qiskit.providers.fake_provider import FakeWashingtonV2
 from qiskit.circuit.library import *
@@ -23,6 +25,12 @@ from contextlib import redirect_stdout
 import multiprocessing
 import logging
 import numpy as np
+
+from pytket.extensions.qiskit import qiskit_to_tk, tk_to_qiskit
+from pytket.architecture import Architecture
+from pytket.circuit import OpType, Node
+from pytket.passes import *
+from pytket.placement import NoiseAwarePlacement
 
 logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
@@ -73,7 +81,7 @@ class Runner:
         self.provided_benchmarks = provided_benchmarks
         self.metric_list = metric_list
         self.compiler_dict = compiler_dict
-        self.backend = backend
+        self.backend = FakeWashingtonV2()
         self.num_runs = num_runs
 
         # TODO: make num_runs a dictionary element for each benchmark
@@ -81,7 +89,61 @@ class Runner:
         self.full_benchmark_list = []
         self.metric_data = {}
 
+        if compiler_dict["compiler"] == "tket":
+            self.tket_pm = self.initialize_tket_pass_manager()
+
         self.preprocess_benchmarks()
+
+    def initialize_tket_pass_manager(self):
+        """
+        Initialize a pass manager for tket.
+        """
+        # Build equivalent of tket backend, it can't represent heterogenous gate sets
+        gateset = {OpType.X, OpType.SX, OpType.Rz, OpType.Measure, OpType.ECR, OpType.CZ}
+        arch = Architecture(self.backend.coupling_map.graph.edge_list())
+        averaged_node_gate_errors = {}
+        averaged_edge_gate_errors = {}
+        averaged_readout_errors = {Node(x[0]): self.backend.target["measure"][x].error for x in self.backend.target["measure"]}
+        for qarg in self.backend.target.qargs:
+            ops = [x for x in self.backend.target.operation_names_for_qargs(qarg) if x not in {"if_else", "measure", "delay"}]
+            avg = 0#statistics.mean(self.backend.target[op][qarg].error for op in ops)
+            if len(qarg) == 1:
+                averaged_node_gate_errors[Node(qarg[0])] = avg
+            else:
+                averaged_edge_gate_errors[tuple(Node(x) for x in qarg)] = avg
+        # BUild tket compilation sequence:
+        passlist = [DecomposeBoxes()]
+        passlist.append(FullPeepholeOptimise())
+        mid_measure = True
+        noise_aware_placement = NoiseAwarePlacement(
+            arch,
+            averaged_node_gate_errors,
+            averaged_edge_gate_errors,
+            averaged_readout_errors,
+        )
+        passlist.append(
+            CXMappingPass(
+                arch,
+                noise_aware_placement,
+                directed_cx=True,
+                delay_measures=(not mid_measure),
+            )
+        )
+        passlist.append(NaivePlacementPass(arch))
+        passlist.extend(
+            [
+                KAKDecomposition(allow_swaps=False),
+                CliffordSimp(False),
+                SynthesiseTket(),
+            ]
+        )
+        rebase_pass = auto_rebase_pass({OpType.X, OpType.SX, OpType.Rz, OpType.CZ})
+        passlist.extend([rebase_pass, RemoveRedundancies()])
+        passlist.append(
+            SimplifyInitial(allow_classical=False, create_all_qubits=True)
+        )
+        tket_pm = SequencePass(passlist)
+        return tket_pm
 
     def get_qasm_benchmark(self, qasm_name):
         with open("./benchmarks/" + f"{qasm_name}", "r") as f:
@@ -157,8 +219,38 @@ class Runner:
                 elif benchmark == "EfficientSU2":
                     self.metric_data["EfficientSU2"] = {"total_time (seconds)": [], "build_time (seconds)": [], "bind_time (seconds)": [], "transpile_time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": [], "version": self.compiler_dict["version"]}
                     start_time = time.perf_counter()
-                    qc = EfficientSU2(100, su2_gates=['rx', 'y'], entanglement='circular', reps=1)
+                    # qc = EfficientSU2(100, su2_gates=['rx', 'ry'], entanglement='circular', reps=1)
+                    num_qubits = 5  # Number of qubits
+                    reps = 1  # Number of repetitions of the SU2 layer
+
+                    qc = QuantumCircuit(num_qubits)
+
+                    # Parameters for rotations
+                    theta = [Parameter(f'θ{i}') for i in range(num_qubits * 2 * reps)]
+
+                    # Add EfficientSU2 layers
+                    for rep in range(reps):
+                        # Add RX and RY gates
+                        for qubit in range(num_qubits):
+                            qc.rx(theta[rep * num_qubits * 2 + qubit], qubit)
+                            qc.ry(theta[rep * num_qubits * 2 + num_qubits + qubit], qubit)
+
+                        # Add circular entanglement
+                        for qubit in range(num_qubits):
+                            qc.cx(qubit, (qubit + 1) % num_qubits)
+
+                    # You can set the parameters to specific values if needed
+                    param_values = {theta[i]: np.random.uniform(0, 2*np.pi) for i in range(len(theta))}
+                    qc = qc.bind_parameters(param_values)
+
+                    # Optionally, add measurements
                     qc.measure_all()
+                    # num_qubits = 10
+                    # qc = QuantumCircuit(num_qubits)
+                    # qc.h(0)
+                    # for i in range(num_qubits - 1):
+                    #     qc.cx(0, i + 1)
+                    #qc.measure_all()
                     build_done_time = time.perf_counter()
                     qc = qc.bind_parameters(np.random.rand(len(qc.parameters)))
                     bind_done_time = time.perf_counter()
@@ -190,13 +282,22 @@ class Runner:
 
     @profile
     def transpile_in_process(self, benchmark, optimization_level):
-        transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
+        # TODO: build backend, import circuit, etc. within separate process
+        #       because tket cannot be pickled.
+        #       e.g. must build pass_list in separate process
+        if self.compiler_dict["compiler"] == "tket":
+            qc = qiskit_to_tk(benchmark)
+            self.tket_pm.apply(qc)
+            transpiled_circuit = tk_to_qiskit(qc)
+        else:
+            transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
         return transpiled_circuit
     
     def profile_func(self, benchmark):
         # To get accurate memory usage, need to multiprocess transpilation
         with multiprocessing.Pool(1) as pool:
             circuit = pool.apply(self.transpile_in_process, (benchmark, self.compiler_dict["optimization_level"]))
+        circuit = self.transpile_in_process(benchmark, self.compiler_dict["optimization_level"])
         return circuit
     
     def extract_memory_increments(self, filename, target_line):
@@ -252,7 +353,12 @@ class Runner:
             logger.info("Calculating speed...")
             # to get accurate time measurement, need to run transpilation without profiling
             start_time = time.perf_counter()
-            transpiled_circuit = transpile(benchmark_circuit, backend=FakeWashingtonV2(), optimization_level=0)
+            if self.compiler_dict["compiler"] == "tket":
+                qc = qiskit_to_tk(benchmark_circuit)
+                self.tket_pm.apply(qc)
+                transpiled_circuit = tk_to_qiskit(qc)
+            else:
+                transpiled_circuit = transpile(benchmark_circuit, backend=FakeWashingtonV2(), optimization_level=0)
             end_time = time.perf_counter()
             self.metric_data[benchmark_name]["transpile_time (seconds)"].append(end_time - start_time)
             if benchmark_name == "EfficientSU2":
@@ -293,7 +399,7 @@ if __name__ == "__main__":
     logger.debug("hello")
     runner = Runner(["EfficientSU2"], 
                     ["depth (gates)", "total_time (seconds)", "build_time (seconds)", "bind_time (seconds)", "transpile_time (seconds)", "memory_footprint (MiB)"], 
-                    {"version": str(sys.argv[1]), "optimization_level": 0},
+                    {"compiler": "tket", "version": 0, "optimization_level": 0}, # "version": str(sys.argv[1]),
                     "qasm_simulator",
                     1)
     runner.run_benchmarks()
