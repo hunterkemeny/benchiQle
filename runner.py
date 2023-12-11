@@ -40,14 +40,14 @@ console_handler.setLevel(logging.INFO)
 
 logger.addHandler(console_handler)
 
+# multiprocessing.set_start_method('fork')
+
 # TODO list: 1. add remaining useful benchmarks from Red Queen (for solving the "gate" problem in red_queen, see Matthew's code)
 #            2. Allow the user to choose which benchmarks and metrics to run on command line and as an import
-#            3.  format the output of json files so that the title of the file mentions the compiler name that is being used (probably don't need the user to input this information, can get versioning in python)
 
-#            4. *Add support for other compilers (ptket, cirq, etc.)
-#            5.* Look at Luciano's message from a few weeks ago and run with those params (take a look at routing difficulty)
-#            8.* Add examples
-#            9.* Add graphs from luciano's file
+#            3. *Add support for other compilers (ptket, cirq, etc.)
+#            4.* Add examples
+#            5.* Add graphs from luciano's file
 
 #            6. Improve on logger output
 #            7. Clean up code, add comments, go thru remainder of todos
@@ -89,8 +89,8 @@ class Runner:
         self.full_benchmark_list = []
         self.metric_data = {}
 
-        if compiler_dict["compiler"] == "tket":
-            self.tket_pm = self.initialize_tket_pass_manager()
+        # if compiler_dict["compiler"] == "tket":
+        #     self.tket_pm = self.initialize_tket_pass_manager()
 
         self.preprocess_benchmarks()
 
@@ -219,7 +219,7 @@ class Runner:
                 elif benchmark == "EfficientSU2":
                     self.metric_data["EfficientSU2"] = {"total_time (seconds)": [], "build_time (seconds)": [], "bind_time (seconds)": [], "transpile_time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": [], "version": self.compiler_dict["version"]}
                     start_time = time.perf_counter()
-                    # qc = EfficientSU2(100, su2_gates=['rx', 'ry'], entanglement='circular', reps=1)
+                    # qc = EfficientSU2(10, su2_gates=['rx', 'ry'], entanglement='circular', reps=1)
                     num_qubits = 5  # Number of qubits
                     reps = 1  # Number of repetitions of the SU2 layer
 
@@ -282,12 +282,10 @@ class Runner:
 
     @profile
     def transpile_in_process(self, benchmark, optimization_level):
-        # TODO: build backend, import circuit, etc. within separate process
-        #       because tket cannot be pickled.
-        #       e.g. must build pass_list in separate process
         if self.compiler_dict["compiler"] == "tket":
+            tket_pm = self.initialize_tket_pass_manager()
             qc = qiskit_to_tk(benchmark)
-            self.tket_pm.apply(qc)
+            tket_pm.apply(qc)
             transpiled_circuit = tk_to_qiskit(qc)
         else:
             transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
@@ -297,7 +295,7 @@ class Runner:
         # To get accurate memory usage, need to multiprocess transpilation
         with multiprocessing.Pool(1) as pool:
             circuit = pool.apply(self.transpile_in_process, (benchmark, self.compiler_dict["optimization_level"]))
-        circuit = self.transpile_in_process(benchmark, self.compiler_dict["optimization_level"])
+        # circuit = self.transpile_in_process(benchmark, self.compiler_dict["optimization_level"])
         return circuit
     
     def extract_memory_increments(self, filename, target_line):
@@ -342,9 +340,13 @@ class Runner:
             # Multiprocesss transpilation to get accurate memory usage
             self.profile_func(benchmark_circuit)
             # Replace this with the path to your file
-            filename = 'memory.txt'
+            
+            filename = f'memory_{str(sys.argv[1])}_{str(sys.argv[2])}.txt'
             # Replace this with the line you are targeting
-            target_line = "transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level)"
+            if self.compiler_dict["compiler"] == "tket":
+                target_line = "tket_pm.apply(qc)"
+            else:
+                target_line = "transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level)"
             memory_data = self.extract_memory_increments(filename, target_line)
             # TODO: determine if units should be added here or in postprocessing
             self.metric_data[benchmark_name]["memory_footprint (MiB)"].append(memory_data)
@@ -399,9 +401,9 @@ if __name__ == "__main__":
     logger.debug("hello")
     runner = Runner(["EfficientSU2"], 
                     ["depth (gates)", "total_time (seconds)", "build_time (seconds)", "bind_time (seconds)", "transpile_time (seconds)", "memory_footprint (MiB)"], 
-                    {"compiler": "tket", "version": 0, "optimization_level": 0}, # "version": str(sys.argv[1]),
+                    {"compiler": str(sys.argv[1]), "version": str(sys.argv[2]), "optimization_level": 0}, # "version": str(sys.argv[1]),
                     "qasm_simulator",
-                    1)
+                    2)
     runner.run_benchmarks()
 
 
