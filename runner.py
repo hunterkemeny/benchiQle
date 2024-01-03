@@ -349,7 +349,7 @@ class Runner:
 if __name__ == "__main__":
     runner = Runner(["EfficientSU2"], 
                     ["depth (gates)", "total_time (seconds)", "build_time (seconds)", "bind_time (seconds)", "transpile_time (seconds)", "memory_footprint (MiB)"], 
-                    {"compiler": str(sys.argv[1]), "version": str(sys.argv[2]), "optimization_level": 0}, # "version": str(sys.argv[1]),
+                    {"compiler": str(sys.argv[1]), "version": str(sys.argv[2]), "optimization_level": 0},
                     FakeWashingtonV2(),
                     2)
     runner.run_benchmarks()

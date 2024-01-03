@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 
-versions=(0.44.0 0.45.0)
+versions=(0.45.0)
 
 for version in "${versions[@]}"
 do
@@ -16,5 +16,3 @@ do
 done
 
 python3 runner.py "pytket" 0 > memory_pytket_0.txt
-
-tail -n 1 memory_${versions[-1]}.txt
