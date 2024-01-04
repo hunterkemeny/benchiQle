@@ -1,26 +1,18 @@
 # TODO: add __init__.py to all folders
 import sys
 import statistics
-import copy
+import os
 
-from benchmarks.benchmark import Benchmark
-from benchmarks.benchmark import small_qasm
-from benchmarks.benchmark import medium_qasm
-from benchmarks.benchmark import large_qasm
-# For benchmarks that are created with qiskit, import them here
-from benchmarks.red_queen.run_ft import generate_ft_circuit_1, generate_ft_circuit_2
-from benchmarks.red_queen.run_bv import build_bv_circuit
-from benchmarks.red_queen.run_ipe import build_ipe
-from benchmarks.red_queen.run_qpe import quantum_phase_estimation
+# TODO: possibly change this import
+from benchmarking.benchmark import Benchmark
+
 from metrics.metrics import Metrics
 from qiskit import *
-from qiskit.circuit import Parameter
 from qiskit.providers.fake_provider import FakeWashingtonV2
 from qiskit.circuit.library import *
 import json
 import time
 from memory_profiler import profile
-from contextlib import redirect_stdout
 import multiprocessing
 import logging
 import numpy as np
@@ -31,6 +23,7 @@ from pytket.architecture import Architecture
 from pytket.circuit import OpType, Node
 from pytket.passes import *
 from pytket.placement import NoiseAwarePlacement
+from pytket.qasm import circuit_from_qasm
 
 logger = logging.getLogger('my_logger')
 logger.setLevel(logging.INFO)
@@ -41,33 +34,21 @@ console_handler.setLevel(logging.INFO)
 logger.addHandler(console_handler)
 
 class Runner:
-    def __init__(self, provided_benchmarks: list, metric_list: list, compiler_dict: dict, backend, num_runs: int):
+    def __init__(self, compiler_dict: dict, backend, num_runs: int, exclude_list=[]):
         """
-        :provided_benchmarks: list of benchmarks to be used --> [benchmark_name]
-        :param metric_list: list of metrics to be used --> [metric_name]
         :param compiler_dict: dictionary of compiler info --> {"compiler": "COMPILER_NAME", "version": "VERSION NUM", "optimization_level": OPTIMIZATION_LEVEL}
         :param backend: name of backend to be used --> "BACKEND_NAME"
         :param num_runs: number of times to run each benchmark
+        :param exclude_list: list of metrics to exclude from the benchmarking process
         """
-
-        self.ALLOWED_QISKIT_BENCHMARKS = [
-            "ft_circuit_1",
-            "ft_circuit_2",
-            "bv_mcm",
-            "bv",
-            "ipe",
-            "qpe",
-            "EfficientSU2"
-        ]
         
-        self.provided_benchmarks = provided_benchmarks
-        self.metric_list = metric_list
         self.compiler_dict = compiler_dict
         self.backend = backend
         self.num_runs = num_runs
+        self.exclude_list = exclude_list
 
         self.full_benchmark_list = []
-        self.metric_data = {}
+        self.metric_data = {"metadata: ": self.compiler_dict}
 
         self.preprocess_benchmarks()
 
@@ -122,114 +103,46 @@ class Runner:
         return tket_pm
 
     def get_qasm_benchmark(self, qasm_name):
-        with open("./benchmarks/" + f"{qasm_name}", "r") as f:
+        with open("./benchmarking/benchmarks/" + f"{qasm_name}", "r") as f:
             qasm = f.read()
         return qasm
+    
+    def list_files(self, directory):
+        return [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
     
     def preprocess_benchmarks(self):
         """
         Preprocess benchmarks before running them. 
         """
-        for benchmark in self.provided_benchmarks:
+        # TODO: define benchmarks as folder with list of qasm files
+        benchmarks = self.list_files('./benchmarking/benchmarks/')
+        for benchmark in benchmarks:
             # Should allow for both qasm string inputs and qiskit circuit inputs, 
             # but should just run benchmarks on the transpile/compile operations
             
-            if benchmark == "small":
-                logger.info("small_qasm: Converting from QASM into Qiskit circuits...")
-                for qasm_name in small_qasm:
-                    logger.info("Converting: " + qasm_name)
-                    qasm = self.get_qasm_benchmark("small_qasm/" + qasm_name)
-                    qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
-                    self.full_benchmark_list.append({qasm_name: qiskit_circuit})
-                    # TODO: improve the logic of this so that we iterate thru the metric_data dict to 
-                    # populate these. And this same logic should be applied in run_benchmark
-                    self.metric_data[qasm_name] = {"total time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
-
-            elif benchmark == "medium":
-                logger.info("medium_qasm: Converting from QASM into Qiskit circuits...")
-                for qasm_name in medium_qasm:
-                    logger.info("Converting: " + qasm_name)
-                    qasm = self.get_qasm_benchmark("medium_qasm/" + qasm_name)
-                    qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
-                    self.full_benchmark_list.append({qasm_name: qiskit_circuit})
-                    self.metric_data[qasm_name] = {"total time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
+            # TODO: first check if the benchmark is in the qasm files in the benchmarks folder
             
-            elif benchmark == "large":
-                logger.info("large_qasm: Converting from QASM into Qiskit circuits...")
-                for qasm_name in large_qasm:
-                    logger.info("Converting: " + qasm_name)
-                    qasm = self.get_qasm_benchmark("large_qasm/" + qasm_name)
-                    qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
-                    self.full_benchmark_list.append({qasm_name: qiskit_circuit})
-                    self.metric_data[qasm_name] = {"total time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
+            qasm = self.get_qasm_benchmark(benchmark)
+            logger.info("Converting " + benchmark + " to high-level circuit...")
+
+            # TODO: could have CLI where user passes in compiler name(s) and version(s) and target backend/couple map and runs
+            #       this could be taken care of by a series of prompts that asks the user for these things.
+            #       and then we don't have jupyter interface. 
+            if self.compiler_dict["compiler"] == "tket":
+                # TODO: determine if this should be a string or a file path
+                tket_circuit = circuit_from_qasm(qasm)
+                self.full_benchmark_list.append({benchmark: tket_circuit})
+            elif self.compiler_dict["compiler"] == "qiskit":
+                qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
+                self.full_benchmark_list.append({benchmark: qiskit_circuit})
+            self.metric_data[benchmark] = {"total_time (seconds)": [], "build_time (seconds)": [], "bind_time (seconds)": [], "transpile_time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": [], "version": self.compiler_dict["version"]}
             
-            # TODO: add suport for red-queen qasm benchmarks
-            # elif benchmark[-5:] == ".qasm":
-            #     qasm = self.get_qasm_benchmark(benchmark)
-            #     qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
-            #     self.full_benchmark_list.append(qiskit_circuit)
-            elif benchmark not in self.ALLOWED_QISKIT_BENCHMARKS:
-                raise Exception(f"Invalid benchmark name: {benchmark}")
-            else:
-                if benchmark == "ft_circuit_1":
-                    self.full_benchmark_list.append({"ft_circuit_1": generate_ft_circuit_1("11111111")})
-                    self.metric_data["ft_circuit_1"] = {"total time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
-                elif benchmark == "ft_circuit_2":
-                    self.full_benchmark_list.append({"ft_circuit_2": generate_ft_circuit_2("11111111")})
-                    self.metric_data["ft_circuit_2"] = {"total time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
-                elif benchmark == "bv_mcm":
-                    self.full_benchmark_list.append({"bv_mcm": build_bv_circuit("110011", True)})
-                    self.metric_data["bv_mcm"] = {"total time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
-                elif benchmark == "bv":
-                    self.full_benchmark_list.append({"bv": build_bv_circuit("110011")})
-                    self.metric_data["bv"] = {"total time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
-                elif benchmark == "ipe":
-                    self.full_benchmark_list.append({"ipe": quantum_phase_estimation(4, 1/8)})
-                    self.metric_data["ipe"] = {"total time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
-                elif benchmark == "qpe":
-                    self.full_benchmark_list.append({"qpe": build_ipe(4, 1/16)})
-                    self.metric_data["qpe"] = {"total time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
-                elif benchmark == "EfficientSU2":
-                    self.metric_data["EfficientSU2"] = {"total_time (seconds)": [], "build_time (seconds)": [], "bind_time (seconds)": [], "transpile_time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": [], "version": self.compiler_dict["version"]}
-                    start_time = time.perf_counter()
-
-                    # TODO: determine why qiskit native EfficientSU2 fails to transform to tket
-                    # qc = EfficientSU2(10, su2_gates=['rx', 'ry'], entanglement='circular', reps=1)
-                    num_qubits = 5  # Number of qubits
-                    reps = 1  # Number of repetitions of the SU2 layer
-
-                    qc = QuantumCircuit(num_qubits)
-                    # Parameters for rotations
-                    theta = [Parameter(f'θ{i}') for i in range(num_qubits * 2 * reps)]
-                    # Add EfficientSU2 layers
-                    for rep in range(reps):
-                        # Add RX and RY gates
-                        for qubit in range(num_qubits):
-                            qc.rx(theta[rep * num_qubits * 2 + qubit], qubit)
-                            qc.ry(theta[rep * num_qubits * 2 + num_qubits + qubit], qubit)
-
-                        # Add circular entanglement
-                        for qubit in range(num_qubits):
-                            qc.cx(qubit, (qubit + 1) % num_qubits)
-                    # You can set the parameters to specific values if needed
-                    param_values = {theta[i]: np.random.uniform(0, 2*np.pi) for i in range(len(theta))}
-                    qc = qc.bind_parameters(param_values)
-                    qc.measure_all()
-                    build_done_time = time.perf_counter()
-
-                    qc = qc.bind_parameters(np.random.rand(len(qc.parameters)))
-                    bind_done_time = time.perf_counter()
-
-                    self.metric_data["EfficientSU2"]["build_time (seconds)"].append(build_done_time - start_time)
-                    self.metric_data["EfficientSU2"]["bind_time (seconds)"].append(bind_done_time - build_done_time)
-                    self.full_benchmark_list.append({"EfficientSU2": qc})
-                    
-
     def run_benchmarks(self):
         """
         Run all benchmarks in full_benchmark_list.
         """
         # TODO: figure out if these extra classes are necessary
+        # TODO: can likely remove metrics folder and class since matthew had another way of retrieving depth (make sure it is from qasm file)
         metrics = Metrics()
         logger_counter = 1
         for benchmark in self.full_benchmark_list:
@@ -286,7 +199,7 @@ class Runner:
         benchmark_name = list(benchmark.keys())[0]
         benchmark_circuit = list(benchmark.values())[0]
         
-        if "memory_footprint (MiB)" in self.metric_list:
+        if "memory_footprint (MiB)" not in self.exclude_list:
             # Add memory_footprint to dictionary corresponding to this benchmark
             
             logger.info("Calculating memory footprint...")
@@ -303,7 +216,7 @@ class Runner:
             memory_data = self.extract_memory_increments(filename, target_line)
             self.metric_data[benchmark_name]["memory_footprint (MiB)"].append(memory_data)
 
-        if "total_time (seconds)" in self.metric_list:
+        if "total_time (seconds)" not in self.exclude_list:
             logger.info("Calculating speed...")
             # to get accurate time measurement, need to run transpilation without profiling
             start_time = time.perf_counter()
@@ -316,9 +229,9 @@ class Runner:
             end_time = time.perf_counter()
             self.metric_data[benchmark_name]["transpile_time (seconds)"].append(end_time - start_time)
             if benchmark_name == "EfficientSU2":
-                self.metric_data[benchmark_name]["total_time (seconds)"].append(self.metric_data[benchmark_name]["transpile_time (seconds)"][-1] +  self.metric_data[benchmark_name]["transpile_time (seconds)"][-1] + self.metric_data[benchmark_name]["bind_time (seconds)"][-1] + self.metric_data[benchmark_name]["build_time (seconds)"][-1])
+                self.metric_data[benchmark_name]["total_time (seconds)"].append(self.metric_data[benchmark_name]["transpile_time (seconds)"][-1] + self.metric_data[benchmark_name]["bind_time (seconds)"][-1] + self.metric_data[benchmark_name]["build_time (seconds)"][-1])
         
-        if "depth (gates)" in self.metric_list:
+        if "depth (gates)" not in self.exclude_list:
             logger.info("Calculating depth...")
             qasm_string = transpiled_circuit.qasm()
             processed_qasm = Benchmark(qasm_string)
@@ -334,6 +247,7 @@ class Runner:
         #   metric name --> aggregate statistics --> value
         benchmark_name = list(benchmark.keys())[0]
         self.metric_data[benchmark_name]["aggregate"] = {}
+        # TODO: determine another way of retrieving what we previously had storded in matric_list
         for metric in self.metric_list:
             self.metric_data[benchmark_name]["aggregate"][metric] = {}
             self.metric_data[benchmark_name]["aggregate"][metric]["mean"] = np.mean(np.array(self.metric_data[benchmark_name][metric], dtype=float))
@@ -344,12 +258,10 @@ class Runner:
 
         logger.info(self.metric_data)
 
-
-
 if __name__ == "__main__":
-    runner = Runner(["EfficientSU2"], 
-                    ["depth (gates)", "total_time (seconds)", "build_time (seconds)", "bind_time (seconds)", "transpile_time (seconds)", "memory_footprint (MiB)"], 
-                    {"compiler": str(sys.argv[1]), "version": str(sys.argv[2]), "optimization_level": 0},
+    runner = Runner({"compiler": str(sys.argv[1]), "version": str(sys.argv[2]), "optimization_level": 0},
+                    # TODO: determine if we should pass in a coupling map (e.g. heavy hex) and then have an if statement
+                    # that chooses the backend to map to. 
                     FakeWashingtonV2(),
                     2)
     runner.run_benchmarks()
