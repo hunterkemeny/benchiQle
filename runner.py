@@ -114,20 +114,12 @@ class Runner:
         """
         Preprocess benchmarks before running them. 
         """
-        # TODO: define benchmarks as folder with list of qasm files
         benchmarks = self.list_files('./benchmarking/benchmarks/')
         for benchmark in benchmarks:
-            # Should allow for both qasm string inputs and qiskit circuit inputs, 
-            # but should just run benchmarks on the transpile/compile operations
-            
-            # TODO: first check if the benchmark is in the qasm files in the benchmarks folder
             
             qasm = self.get_qasm_benchmark(benchmark)
             logger.info("Converting " + benchmark + " to high-level circuit...")
 
-            # TODO: could have CLI where user passes in compiler name(s) and version(s) and target backend/couple map and runs
-            #       this could be taken care of by a series of prompts that asks the user for these things.
-            #       and then we don't have jupyter interface. 
             if self.compiler_dict["compiler"] == "tket":
                 # TODO: determine if this should be a string or a file path
                 tket_circuit = circuit_from_qasm(qasm)
@@ -205,10 +197,7 @@ class Runner:
             logger.info("Calculating memory footprint...")
             # Multiprocesss transpilation to get accurate memory usage
             self.profile_func(benchmark_circuit)
-            # Replace this with the path to your file
-            
             filename = f'memory_{str(sys.argv[1])}_{str(sys.argv[2])}.txt'
-            # Replace this with the line you are targeting
             if self.compiler_dict["compiler"] == "tket":
                 target_line = "tket_pm.apply(qc)"
             else:
@@ -259,12 +248,17 @@ class Runner:
         logger.info(self.metric_data)
 
 if __name__ == "__main__":
+
+    # TODO: change inputs so that there are multiple compilers, and that the inputs are from the command line
     runner = Runner({"compiler": str(sys.argv[1]), "version": str(sys.argv[2]), "optimization_level": 0},
                     # TODO: determine if we should pass in a coupling map (e.g. heavy hex) and then have an if statement
                     # that chooses the backend to map to. 
                     FakeWashingtonV2(),
                     2)
     runner.run_benchmarks()
+
+    
+
 
 
 
