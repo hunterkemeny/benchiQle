@@ -250,11 +250,11 @@ class Runner:
 if __name__ == "__main__":
 
     # TODO: change inputs so that there are multiple compilers, and that the inputs are from the command line
-    runner = Runner({"compiler": str(sys.argv[1]), "version": str(sys.argv[2]), "optimization_level": 0},
+    runner = Runner({"compiler": str(sys.argv[1]), "version": str(sys.argv[2]), "optimization_level": str(sys.argv[3])},
                     # TODO: determine if we should pass in a coupling map (e.g. heavy hex) and then have an if statement
                     # that chooses the backend to map to. 
-                    FakeWashingtonV2(),
-                    2)
+                    FakeWashingtonV2(), # TODO: determine how to transform string backend input into backend object
+                    sys.argv[5])
     runner.run_benchmarks()
 
     
