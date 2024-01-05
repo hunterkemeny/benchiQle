@@ -53,14 +53,16 @@ else
     # TODO: may not need pytket (just pytket qiskit); also may not need pytest, also may need to rearrange 
     # because we may not be able to run runner.py without installing pytket; also need to insert version for pytket
     # TODO: may want to check tket compiler first, so then we can download the version that the user chose
-    pip install pytket
-    pip install pytket-qiskit
-    if [ "$compiler1" = "qiskit" ]
+    
+    if [ "$compiler1" = "pytket" ]
+    then
+        pip install pytket-qiskit==$version1
+        pip install qiskit
+        
+    elif [ "$compiler1" = "qiskit" ]
     then
         pip install qiskit==$version1
-    elif [ "$compiler1" = "pytket" ]
-    then
-        echo "tket already installed"
+        pip install pytket-qiskit
     else
         # TODO: this check should come earlier
         echo "Compiler $compiler1 is not supported."
@@ -90,14 +92,18 @@ else
     source $venv_name/bin/activate
     pip install memory_profiler
     pip install pytest
-    if [ "$compiler2" == "qiskit" ]
+    pip install numpy
+    if [ "$compiler2" = "pytket" ]
+    then
+        pip install pytket-qiskit==$version2
+        pip install qiskit
+        
+    elif [ "$compiler2" = "qiskit" ]
     then
         pip install qiskit==$version2
-    elif [ "$compiler2" == "pytket" ]
-    then
-        pip install pytket
         pip install pytket-qiskit
     else
+        # TODO: this check should come earlier
         echo "Compiler $compiler2 is not supported."
         exit 1
     fi

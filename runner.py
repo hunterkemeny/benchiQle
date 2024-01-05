@@ -98,7 +98,7 @@ class Runner:
     @profile
     def transpile_in_process(self, benchmark, optimization_level):
         if self.compiler_dict["compiler"] == "pytket":
-            tket_pm = initialize_tket_pass_manager(self.backend)
+            tket_pm = initialize_tket_pass_manager(FakeWashingtonV2())
             tket_pm.apply(benchmark)
         else:
             # TODO: Determine why we cannot use the backend from the constructor here (self.backend throwing error)
@@ -140,10 +140,11 @@ class Runner:
             # Multiprocesss transpilation to get accurate memory usage
             self.profile_func(benchmark_circuit)
             filename = f'memory_{str(sys.argv[1])}_{str(sys.argv[2])}.txt'
+
             if self.compiler_dict["compiler"] == "pytket":
                 target_line = "tket_pm.apply(benchmark)"
             else:
-                target_line = "transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level)"
+                target_line = "transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level)"
             memory_data = self.extract_memory_increments(filename, target_line)
             self.metric_data[benchmark_name]["memory_footprint (MiB)"].append(memory_data)
 
@@ -151,22 +152,29 @@ class Runner:
             logger.info("Calculating speed...")
             # to get accurate time measurement, need to run transpilation without profiling
             if self.compiler_dict["compiler"] == "pytket":
-                # TODO: will need to import these lines from utils.py?
-                # qc = qiskit_to_tk(benchmark_circuit)
+                # TODO: put this in a function and rerun under depth to separate 
                 tket_pm = initialize_tket_pass_manager(self.backend)
                 start_time = time.perf_counter()
                 tket_pm.apply(benchmark_circuit)
-                #transpiled_circuit = tk_to_qiskit(qc)
             else:
                 start_time = time.perf_counter()
-                transpiled_circuit = transpile(benchmark_circuit, backend=self.backend, optimization_level=0)
+                # TODO: transpiled_circuit here is used later, and inconsistent wiht first half of if statement
+                transpile(benchmark_circuit, backend=self.backend, optimization_level=0)
             end_time = time.perf_counter()
             self.metric_data[benchmark_name]["transpile_time (seconds)"].append(end_time - start_time)
             self.metric_data[benchmark_name]["total_time (seconds)"].append(end_time - start_time +  + self.metric_data[benchmark_name]["build_time (seconds)"][-1] + self.metric_data[benchmark_name]["transpile_time (seconds)"][-1])
         
         if "depth (gates)" not in self.exclude_list:
+            if self.compiler_dict["compiler"] == "pytket":
+                tket_pm = initialize_tket_pass_manager(self.backend)
+                tket_pm.apply(benchmark_circuit)
+                transpiled_circuit = benchmark_circuit
+                qasm_string = circuit_to_qasm_str(transpiled_circuit)
+            else:
+                transpiled_circuit = transpile(benchmark_circuit, backend=self.backend, optimization_level=0)
+                qasm_string = transpiled_circuit.qasm()
+
             logger.info("Calculating depth...")
-            qasm_string = transpiled_circuit.qasm()
             processed_qasm = Benchmark(qasm_string)
             depth = metrics.get_circuit_depth(processed_qasm)
             self.metric_data[benchmark_name]["depth (gates)"].append(depth)

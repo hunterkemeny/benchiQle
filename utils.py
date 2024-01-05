@@ -5,6 +5,7 @@ from pytket.circuit import OpType, Node
 from pytket.passes import *
 from pytket.placement import NoiseAwarePlacement
 from pytket.qasm import circuit_from_qasm
+from pytket.qasm import circuit_to_qasm_str
 
 import statistics
 
