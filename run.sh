@@ -36,6 +36,7 @@ fi
 # TODO: make this modular so there is just a call to a function that does this for compiler 1 and 2 (so code doesnt repeat?)
 # Naming convention: venv_compilerName_versionNumber
 venv_name="venv_${compiler1}_${version1}"
+cd virtual_environments
 if [ -d "$venv_name" ]
 then
     echo "Starting up virtual environment $venv_name."
@@ -47,22 +48,27 @@ else
     source $venv_name/bin/activate
     pip install memory_profiler
     pip install pytest
-    if [ "$compiler1" == "qiskit" ]
-    then
-        pip install qiskit==$version1
-    elif [ "$compiler1" == "pytket" ]
-    then
+    pip install numpy
+    # TODO: installing tket because it is being imported through utils; possibly remove this dependency or restructure
     # TODO: may not need pytket (just pytket qiskit); also may not need pytest, also may need to rearrange 
     # because we may not be able to run runner.py without installing pytket; also need to insert version for pytket
-        pip install pytket
-        pip install pytket-qiskit
+    # TODO: may want to check tket compiler first, so then we can download the version that the user chose
+    pip install pytket
+    pip install pytket-qiskit
+    if [ "$compiler1" = "qiskit" ]
+    then
+        pip install qiskit==$version1
+    elif [ "$compiler1" = "pytket" ]
+    then
+        echo "tket already installed"
     else
         # TODO: this check should come earlier
         echo "Compiler $compiler1 is not supported."
         exit 1
     fi
 fi
-
+# TODO: should I suppress the pip install outputs?
+cd ..
 python3 runner.py $compiler1 $version1 $opt1 $backend $num_runs > memory_${compiler1}_$version1.txt
 deactivate
 
