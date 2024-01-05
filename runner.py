@@ -63,9 +63,9 @@ class Runner:
             qasm = self.get_qasm_benchmark(benchmark)
             logger.info("Converting " + benchmark + " to high-level circuit...")
 
-            if self.compiler_dict["compiler"] == "tket":
+            if self.compiler_dict["compiler"] == "pytket":
                 # TODO: determine if this should be a string or a file path
-                tket_circuit = circuit_from_qasm(qasm)
+                tket_circuit = circuit_from_qasm("./benchmarking/benchmarks/" + f"{benchmark}")
                 build_time = time.perf_counter()
                 self.full_benchmark_list.append({benchmark: tket_circuit})
             elif self.compiler_dict["compiler"] == "qiskit":
@@ -73,7 +73,7 @@ class Runner:
                 build_time = time.perf_counter()
                 self.full_benchmark_list.append({benchmark: qiskit_circuit})
             # TODO: This should be related to metric list in some way
-            self.metric_data[benchmark] = {"total_time (seconds)": [], "build_time (seconds)": [build_time], "transpile_time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
+            self.metric_data[benchmark] = {"total_time (seconds)": [], "build_time (seconds)": [start_time - build_time], "transpile_time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
             
     def run_benchmarks(self):
         """
@@ -94,24 +94,20 @@ class Runner:
 
         with open('metrics.json', 'a') as json_file:
             json.dump(self.metric_data, json_file)
-
+    
     @profile
     def transpile_in_process(self, benchmark, optimization_level):
-        if self.compiler_dict["compiler"] == "tket":
-            tket_pm = initialize_tket_pass_manager()
-            qc = qiskit_to_tk(benchmark)
-            tket_pm.apply(qc)
-            transpiled_circuit = tk_to_qiskit(qc)
+        if self.compiler_dict["compiler"] == "pytket":
+            tket_pm = initialize_tket_pass_manager(self.backend)
+            tket_pm.apply(benchmark)
         else:
             # TODO: Determine why we cannot use the backend from the constructor here (self.backend throwing error)
-            transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
-        return transpiled_circuit
+            transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
     
     def profile_func(self, benchmark):
         # To get accurate memory usage, need to multiprocess transpilation
         with multiprocessing.Pool(1) as pool:
-            circuit = pool.apply(self.transpile_in_process, (benchmark, self.compiler_dict["optimization_level"]))
-        return circuit
+            pool.apply(self.transpile_in_process, (benchmark, self.compiler_dict["optimization_level"]))
     
     def extract_memory_increments(self, filename, target_line):
         with open(filename, 'r') as f:
@@ -144,8 +140,8 @@ class Runner:
             # Multiprocesss transpilation to get accurate memory usage
             self.profile_func(benchmark_circuit)
             filename = f'memory_{str(sys.argv[1])}_{str(sys.argv[2])}.txt'
-            if self.compiler_dict["compiler"] == "tket":
-                target_line = "tket_pm.apply(qc)"
+            if self.compiler_dict["compiler"] == "pytket":
+                target_line = "tket_pm.apply(benchmark)"
             else:
                 target_line = "transpiled_circuit = transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level)"
             memory_data = self.extract_memory_increments(filename, target_line)
@@ -154,13 +150,15 @@ class Runner:
         if "total_time (seconds)" not in self.exclude_list:
             logger.info("Calculating speed...")
             # to get accurate time measurement, need to run transpilation without profiling
-            start_time = time.perf_counter()
-            if self.compiler_dict["compiler"] == "tket":
+            if self.compiler_dict["compiler"] == "pytket":
                 # TODO: will need to import these lines from utils.py?
-                qc = qiskit_to_tk(benchmark_circuit)
-                self.tket_pm.apply(qc)
-                transpiled_circuit = tk_to_qiskit(qc)
+                # qc = qiskit_to_tk(benchmark_circuit)
+                tket_pm = initialize_tket_pass_manager(self.backend)
+                start_time = time.perf_counter()
+                tket_pm.apply(benchmark_circuit)
+                #transpiled_circuit = tk_to_qiskit(qc)
             else:
+                start_time = time.perf_counter()
                 transpiled_circuit = transpile(benchmark_circuit, backend=self.backend, optimization_level=0)
             end_time = time.perf_counter()
             self.metric_data[benchmark_name]["transpile_time (seconds)"].append(end_time - start_time)

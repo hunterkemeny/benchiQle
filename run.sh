@@ -5,7 +5,7 @@
 
 # TODO: go thru and deal with default values for all of these
 echo "Welcome to BenchiQle!"
-echo "Enter the first compiler you would like to benchmark (we currently support qiskit and tket): "
+echo "Enter the first compiler you would like to benchmark (we currently support qiskit and pytket): "
 read compiler1
 echo "Enter the version of the compiler you would like to benchmark: "
 read version1

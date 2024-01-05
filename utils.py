@@ -8,18 +8,23 @@ from pytket.qasm import circuit_from_qasm
 
 import statistics
 
-def initialize_tket_pass_manager():
+def initialize_tket_pass_manager(backend):
     """
     Initialize a pass manager for tket.
     """
     # Build equivalent of tket backend, it can't represent heterogenous gate sets
-    arch = Architecture(self.backend.coupling_map.graph.edge_list())
+    arch = Architecture(backend.coupling_map.graph.edge_list())
     averaged_node_gate_errors = {}
     averaged_edge_gate_errors = {}
-    averaged_readout_errors = {Node(x[0]): self.backend.target["measure"][x].error for x in self.backend.target["measure"]}
-    for qarg in self.backend.target.qargs:
-        ops = [x for x in self.backend.target.operation_names_for_qargs(qarg) if x not in {"if_else", "measure", "delay"}]
-        avg = statistics.mean(self.backend.target[op][qarg].error for op in ops)
+    averaged_readout_errors = {Node(x[0]): backend.target["measure"][x].error for x in backend.target["measure"]}
+    for qarg in backend.target.qargs:
+        ops = [x for x in backend.target.operation_names_for_qargs(qarg) if x not in {"if_else", "measure", "delay"}]
+        errors = [backend.target[op][qarg].error for op in ops if backend.target[op][qarg].error is not None]
+        if errors:
+            avg = statistics.mean(errors)
+        else:
+            avg = 0  # or some other default value
+        
         if len(qarg) == 1:
             averaged_node_gate_errors[Node(qarg[0])] = avg
         else:
