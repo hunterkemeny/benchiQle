@@ -81,6 +81,7 @@ then
 fi
 
 venv_name="venv_${compiler2}_${version2}"
+cd virtual_environments
 if [ -d "$venv_name" ]
 then
     echo "Starting up virtual environment $venv_name."
@@ -109,5 +110,6 @@ else
     fi
 fi
 
+cd ..
 python3 runner.py $compiler2 $version2 $opt2 $backend $num_runs > memory_${compiler2}_$version2.txt
 deactivate

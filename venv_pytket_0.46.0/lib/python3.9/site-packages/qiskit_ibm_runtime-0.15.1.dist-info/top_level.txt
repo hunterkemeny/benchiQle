@@ -1,2 +1,0 @@
-program_source
-qiskit_ibm_runtime
