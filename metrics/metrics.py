@@ -1,12 +1,5 @@
 class Metrics:
 
-    # def __init__(self, metric):
-    #     self.metric = metric
-
-
-    # TODO: put all metrics as functions in Metric class
-    #       load them to runner.py with metric_list. 
-
     """
     Metrics currently taken from QASMBench.
     Would likely be better to call QASMBench for these functions in the future.

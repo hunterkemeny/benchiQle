@@ -1,20 +1,18 @@
-# TODO: add __init__.py to all folders
 import sys
 import os
+import json
+import time
+import multiprocessing
+import logging
 
-# TODO: possibly change this import
 from benchmarking.benchmark import Benchmark
+from metrics.metrics import Metrics
 from utils import *
 
-from metrics.metrics import Metrics
 from qiskit import *
 from qiskit.providers.fake_provider import FakeWashingtonV2
 from qiskit.circuit.library import *
-import json
-import time
 from memory_profiler import profile
-import multiprocessing
-import logging
 import numpy as np
 
 logger = logging.getLogger('my_logger')
@@ -26,7 +24,7 @@ console_handler.setLevel(logging.INFO)
 logger.addHandler(console_handler)
 
 class Runner:
-    def __init__(self, compiler_dict: dict, backend, num_runs: int, exclude_list=[]):
+    def __init__(self, compiler_dict: dict, backend, num_runs: int, second_compiler_readout: str, exclude_list=[]):
         """
         :param compiler_dict: dictionary of compiler info --> {"compiler": "COMPILER_NAME", "version": "VERSION NUM", "optimization_level": OPTIMIZATION_LEVEL}
         :param backend: name of backend to be used --> "BACKEND_NAME"
@@ -42,6 +40,7 @@ class Runner:
         self.full_benchmark_list = []
         self.metric_data = {"metadata: ": self.compiler_dict}
         self.metric_list = ["total_time (seconds)", "build_time (seconds)", "transpile_time (seconds)", "depth (gates)", "memory_footprint (MiB)"]
+        self.second_compiler_readout = second_compiler_readout
 
         self.preprocess_benchmarks()
 
@@ -59,12 +58,14 @@ class Runner:
         """
         benchmarks = self.list_files('./benchmarking/benchmarks/')
         for benchmark in benchmarks:
+            if benchmark == ".DS_Store": continue
             start_time = time.perf_counter()
             qasm = self.get_qasm_benchmark(benchmark)
             logger.info("Converting " + benchmark + " to high-level circuit...")
 
+            # TODO: turn what is inside the if statement into a function that is in a separate file for 
+            # each compiler. 
             if self.compiler_dict["compiler"] == "pytket":
-                # TODO: determine if this should be a string or a file path
                 tket_circuit = circuit_from_qasm("./benchmarking/benchmarks/" + f"{benchmark}")
                 build_time = time.perf_counter()
                 self.full_benchmark_list.append({benchmark: tket_circuit})
@@ -72,15 +73,13 @@ class Runner:
                 qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
                 build_time = time.perf_counter()
                 self.full_benchmark_list.append({benchmark: qiskit_circuit})
-            # TODO: This should be related to metric list in some way
             self.metric_data[benchmark] = {"total_time (seconds)": [], "build_time (seconds)": [start_time - build_time], "transpile_time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
             
     def run_benchmarks(self):
         """
         Run all benchmarks in full_benchmark_list.
         """
-        # TODO: figure out if these extra classes are necessary
-        # TODO: can likely remove metrics folder and class since matthew had another way of retrieving depth (make sure it is from qasm file)
+        # TODO: for metrics and benchmark, should pull from qasmbench
         metrics = Metrics()
         logger_counter = 1
         for benchmark in self.full_benchmark_list:
@@ -91,18 +90,35 @@ class Runner:
                 logger_counter += 1
             
             self.postprocess_metrics(benchmark)
+        self.save_results()
 
-        with open('metrics.json', 'a') as json_file:
-            json.dump(self.metric_data, json_file)
+    def delete_ds_store(self, directory):
+        ds_store_path = os.path.join(directory, '.DS_Store')
+        if os.path.exists(ds_store_path):
+            os.remove(ds_store_path)
     
+    def save_results(self):
+        self.delete_ds_store('results')
+        run_number = len([f for f in os.listdir('results') if os.path.isfile(os.path.join('results', f))]) + 1
+
+        if self.second_compiler_readout == "true":
+            with open(f'results/results_run{run_number - 1}.json', 'r') as json_file:
+                data = json.load(json_file)
+            data.append(self.metric_data)
+            with open(f'results/results_run{run_number - 1}.json', 'w') as json_file:
+                json.dump(data, json_file)
+        else:
+            with open(f'results/results_run{run_number}.json', 'w') as json_file:
+                json.dump([self.metric_data], json_file)
+
     @profile
     def transpile_in_process(self, benchmark, optimization_level):
+        # TODO: this way of multiprocesing does not work because backend is not pickleable.
         if self.compiler_dict["compiler"] == "pytket":
             tket_pm = initialize_tket_pass_manager(FakeWashingtonV2())
             tket_pm.apply(benchmark)
         else:
-            # TODO: Determine why we cannot use the backend from the constructor here (self.backend throwing error)
-            transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) # TODO: add generality for compilers with compiler_dict
+            transpile(benchmark, backend=FakeWashingtonV2(), optimization_level=optimization_level) 
     
     def profile_func(self, benchmark):
         # To get accurate memory usage, need to multiprocess transpilation
@@ -129,13 +145,14 @@ class Runner:
         :param metric_data: dictionary containing all metric data
         """
 
-        # TODO add variables to running the script so the user can decide benchmarks and metrics from the command line
         benchmark_name = list(benchmark.keys())[0]
         benchmark_circuit = list(benchmark.values())[0]
         
+        # TODO: turn everything that is inside the if statement into a function that is in a separate file for
+        # each metric
+
         if "memory_footprint (MiB)" not in self.exclude_list:
             # Add memory_footprint to dictionary corresponding to this benchmark
-            
             logger.info("Calculating memory footprint...")
             # Multiprocesss transpilation to get accurate memory usage
             self.profile_func(benchmark_circuit)
@@ -152,13 +169,11 @@ class Runner:
             logger.info("Calculating speed...")
             # to get accurate time measurement, need to run transpilation without profiling
             if self.compiler_dict["compiler"] == "pytket":
-                # TODO: put this in a function and rerun under depth to separate 
                 tket_pm = initialize_tket_pass_manager(self.backend)
                 start_time = time.perf_counter()
                 tket_pm.apply(benchmark_circuit)
             else:
                 start_time = time.perf_counter()
-                # TODO: transpiled_circuit here is used later, and inconsistent wiht first half of if statement
                 transpile(benchmark_circuit, backend=self.backend, optimization_level=0)
             end_time = time.perf_counter()
             self.metric_data[benchmark_name]["transpile_time (seconds)"].append(end_time - start_time)
@@ -179,18 +194,13 @@ class Runner:
             depth = metrics.get_circuit_depth(processed_qasm)
             self.metric_data[benchmark_name]["depth (gates)"].append(depth)
 
-        logger.info(self.metric_data)
-
     def postprocess_metrics(self, benchmark):
         """
         Postprocess metrics to include aggregate statistics.
         """
         # For each metric, calculate mean, median, range, variance, standard dev
-        # aggregate:
-        #   metric name --> aggregate statistics --> value
         benchmark_name = list(benchmark.keys())[0]
         self.metric_data[benchmark_name]["aggregate"] = {}
-        # TODO: determine another way of retrieving what we previously had storded in matric_list
         for metric in self.metric_list:
             self.metric_data[benchmark_name]["aggregate"][metric] = {}
             self.metric_data[benchmark_name]["aggregate"][metric]["mean"] = np.mean(np.array(self.metric_data[benchmark_name][metric], dtype=float))
@@ -203,12 +213,12 @@ class Runner:
 
 if __name__ == "__main__":
 
-    # TODO: change inputs so that there are multiple compilers, and that the inputs are from the command line
     runner = Runner({"compiler": str(sys.argv[1]), "version": str(sys.argv[2]), "optimization_level": int(sys.argv[3])},
                     # TODO: determine if we should pass in a coupling map (e.g. heavy hex) and then have an if statement
                     # that chooses the backend to map to. 
                     FakeWashingtonV2(), # TODO: determine how to transform string backend input into backend object
-                    int(sys.argv[5]))
+                    int(sys.argv[5]),
+                    str(sys.argv[6]))
     runner.run_benchmarks()
 
     

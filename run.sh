@@ -1,17 +1,29 @@
 #!/usr/bin/env zsh
 
-# At some point will want to have a for loop so people can run multiple versions of the same compiler, or compare
-# more than 2 compilers. 
-
-# TODO: go thru and deal with default values for all of these
 echo "Welcome to BenchiQle!"
-echo "Enter the first compiler you would like to benchmark (we currently support qiskit and pytket): "
+echo "Enter the first compiler you would like to benchmark (we currently support 'qiskit' and 'pytket'): "
+
 read compiler1
-echo "Enter the version of the compiler you would like to benchmark: "
+if [ "$compiler1" != "qiskit" ] && [ "$compiler1" != "pytket" ]
+then
+    echo "Invalid compiler entered, exiting."
+    exit 0
+fi
+echo "Enter the version of the compiler you would like to benchmark "
+echo "(the latest qiskit version is '0.45.0', and the latest pytket is '1.22.0'): "
 read version1
 echo "Enter the optimization level for which you would like to run the compiler: "
-read opt1
-echo "Enter the second compiler you would like to benchmark (press enter if you only want to benchmark one compiler): "
+if [ "$compiler1" = "pytket" ]
+then
+    echo "Currently only using default optiization for pytket."
+    opt1=2
+elif [ "$compiler1" = "qiskit" ]
+then
+    echo "(qiskit supports optimization levels 0, 1, 2, and 3)"
+    read opt1
+fi
+echo "Enter the second compiler you would like to benchmark. Press enter if you only want to benchmark one compiler. "
+echo "(we currently support only 'qiskit' and 'pytket'): "
 read compiler2
 if [ -z "$compiler2" ]
 then
@@ -19,11 +31,19 @@ then
 else
     echo "Benchmarking will be done with $compiler2 as the second compiler."
     echo "Enter the version of the compiler you would like to benchmark: "
+    echo "(the latest qiskit version is '0.45.0', and the latest pytket is '1.22.0'): "
     read version2
     echo "Enter the optimization level for which you would like to run the compiler: "
-    read opt2
+    if [ "$compiler2" = "pytket" ]
+    then
+        echo "Currently only using default optiization for pytket."
+        opt2=2
+    elif [ "$compiler2" = "qiskit" ]
+    then
+        echo "(qiskit supports optimization levels 0, 1, 2, and 3)"
+        read opt2
+    fi
 fi
-# TODO: want to allow for users to compare compilers with different backends? And with different runs for each compiler?
 echo "Enter the backend you would like to benchmark (default is IBM FakeWashington): "
 read backend
 echo "Enter the number of times you would like to run each benchmark (default is 1): "
@@ -33,46 +53,42 @@ then
     num_runs=1
 fi
 
-# TODO: make this modular so there is just a call to a function that does this for compiler 1 and 2 (so code doesnt repeat?)
-# Naming convention: venv_compilerName_versionNumber
-venv_name="venv_${compiler1}_${version1}"
-cd virtual_environments
-if [ -d "$venv_name" ]
-then
-    echo "Starting up virtual environment $venv_name."
-    source $venv_name/bin/activate
-else
-    echo "Virtual environment $venv_name does not yet exist on your system."
-    echo "Creating virtual environment $venv_name."
-    python3 -m venv $venv_name
-    source $venv_name/bin/activate
-    pip install memory_profiler
-    pip install pytest
-    pip install numpy
-    # TODO: installing tket because it is being imported through utils; possibly remove this dependency or restructure
-    # TODO: may not need pytket (just pytket qiskit); also may not need pytest, also may need to rearrange 
-    # because we may not be able to run runner.py without installing pytket; also need to insert version for pytket
-    # TODO: may want to check tket compiler first, so then we can download the version that the user chose
-    
-    if [ "$compiler1" = "pytket" ]
+venv_spinup () {
+    # Naming convention: venv_compilerName_versionNumber
+    venv_name="venv_${1}_$2"
+    cd virtual_environments
+    if [ -d "$venv_name" ]
     then
-        pip install pytket-qiskit==$version1
-        pip install qiskit
-        
-    elif [ "$compiler1" = "qiskit" ]
-    then
-        pip install qiskit==$version1
-        pip install pytket-qiskit
+        echo "Starting up virtual environment $venv_name."
+        source $venv_name/bin/activate
     else
-        # TODO: this check should come earlier
-        echo "Compiler $compiler1 is not supported."
-        exit 1
+        echo "Virtual environment $venv_name does not yet exist on your system."
+        echo "Creating virtual environment $venv_name."
+        python3 -m venv $venv_name
+        source $venv_name/bin/activate
+        pip install memory_profiler
+        pip install numpy
+        # TODO: installing tket because it is being imported through utils; possibly remove this dependency or restructure
+        # TODO: should switch to pytket instead of pytket-qiskit after rearranging utils and file structure
+        
+        if [ "$1" = "pytket" ]
+        then
+            pip install pytket==$2
+            pip install qiskit
+        elif [ "$1" = "qiskit" ]
+        then
+            pip install qiskit==$2
+            # TODO: add back pytekt install if necessary
+        fi
     fi
-fi
-# TODO: should I suppress the pip install outputs?
-cd ..
-python3 runner.py $compiler1 $version1 $opt1 $backend $num_runs > memory_${compiler1}_$version1.txt
-deactivate
+    # TODO: should I suppress the pip install outputs? And suppress warnings?
+    cd ..
+    python3 runner.py $1 $2 $3 $4 $5 $6 > memory_${1}_$2.txt
+    deactivate
+}
+
+second_compiler_readout=false
+venv_spinup $compiler1 $version1 $opt1 $backend $num_runs $second_compiler_readout
 
 if [ -z "$compiler2" ]
 then
@@ -80,36 +96,5 @@ then
     exit 0
 fi
 
-venv_name="venv_${compiler2}_${version2}"
-cd virtual_environments
-if [ -d "$venv_name" ]
-then
-    echo "Starting up virtual environment $venv_name."
-    source $venv_name/bin/activate
-else
-    echo "Virtual environment $venv_name does not yet exist on your system."
-    echo "Creating virtual environment $venv_name."
-    python3 -m venv $venv_name
-    source $venv_name/bin/activate
-    pip install memory_profiler
-    pip install pytest
-    pip install numpy
-    if [ "$compiler2" = "pytket" ]
-    then
-        pip install pytket-qiskit==$version2
-        pip install qiskit
-        
-    elif [ "$compiler2" = "qiskit" ]
-    then
-        pip install qiskit==$version2
-        pip install pytket-qiskit
-    else
-        # TODO: this check should come earlier
-        echo "Compiler $compiler2 is not supported."
-        exit 1
-    fi
-fi
-
-cd ..
-python3 runner.py $compiler2 $version2 $opt2 $backend $num_runs > memory_${compiler2}_$version2.txt
-deactivate
+second_compiler_readout=true
+venv_spinup $compiler2 $version2 $opt2 $backend $num_runs $second_compiler_readout

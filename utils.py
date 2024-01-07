@@ -1,5 +1,4 @@
 # PyTket imports
-from pytket.extensions.qiskit import qiskit_to_tk, tk_to_qiskit
 from pytket.architecture import Architecture
 from pytket.circuit import OpType, Node
 from pytket.passes import *
