@@ -23,6 +23,8 @@ console_handler.setLevel(logging.INFO)
 
 logger.addHandler(console_handler)
 
+# TODO: comment this class well
+
 class Runner:
     def __init__(self, compiler_dict: dict, backend, num_runs: int, second_compiler_readout: str, exclude_list=[]):
         """
@@ -35,6 +37,7 @@ class Runner:
         self.compiler_dict = compiler_dict
         self.backend = backend
         self.num_runs = num_runs
+        # TODO: may want to find a better way to exclude metrics (e.g. by having user choose metrics in the command line)
         self.exclude_list = exclude_list
 
         self.full_benchmark_list = []
@@ -52,6 +55,11 @@ class Runner:
     def list_files(self, directory):
         return [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
     
+    def delete_ds_store(self, directory):
+        ds_store_path = os.path.join(directory, '.DS_Store')
+        if os.path.exists(ds_store_path):
+            os.remove(ds_store_path)
+    
     def preprocess_benchmarks(self):
         """
         Preprocess benchmarks before running them. 
@@ -59,20 +67,17 @@ class Runner:
         benchmarks = self.list_files('./benchmarking/benchmarks/')
         for benchmark in benchmarks:
             if benchmark == ".DS_Store": continue
-            start_time = time.perf_counter()
             qasm = self.get_qasm_benchmark(benchmark)
             logger.info("Converting " + benchmark + " to high-level circuit...")
 
-            # TODO: turn what is inside the if statement into a function that is in a separate file for 
-            # each compiler. 
+            start_time = time.perf_counter()
             if self.compiler_dict["compiler"] == "pytket":
-                tket_circuit = circuit_from_qasm("./benchmarking/benchmarks/" + f"{benchmark}")
-                build_time = time.perf_counter()
-                self.full_benchmark_list.append({benchmark: tket_circuit})
+                circuit = circuit_from_qasm("./benchmarking/benchmarks/" + f"{benchmark}")
             elif self.compiler_dict["compiler"] == "qiskit":
-                qiskit_circuit = QuantumCircuit.from_qasm_str(qasm)
-                build_time = time.perf_counter()
-                self.full_benchmark_list.append({benchmark: qiskit_circuit})
+                circuit = QuantumCircuit.from_qasm_str(qasm)
+            build_time = time.perf_counter()
+
+            self.full_benchmark_list.append({benchmark: circuit})
             self.metric_data[benchmark] = {"total_time (seconds)": [], "build_time (seconds)": [start_time - build_time], "transpile_time (seconds)": [], "depth (gates)": [], "memory_footprint (MiB)": []}
             
     def run_benchmarks(self):
@@ -91,15 +96,10 @@ class Runner:
             
             self.postprocess_metrics(benchmark)
         self.save_results()
-
-    def delete_ds_store(self, directory):
-        ds_store_path = os.path.join(directory, '.DS_Store')
-        if os.path.exists(ds_store_path):
-            os.remove(ds_store_path)
     
     def save_results(self):
         self.delete_ds_store('results')
-        run_number = len([f for f in os.listdir('results') if os.path.isfile(os.path.join('results', f))]) + 1
+        run_number = len(self.list_files('results')) + 1
 
         if self.second_compiler_readout == "true":
             with open(f'results/results_run{run_number - 1}.json', 'r') as json_file:
@@ -149,7 +149,8 @@ class Runner:
         benchmark_circuit = list(benchmark.values())[0]
         
         # TODO: turn everything that is inside the if statement into a function that is in a separate file for
-        # each metric
+        # each metric? Could have a metrics folder with a file for each metric. Users could easily add their own
+        # metrics by adding a file to the metrics folder. Then here we can for loop over all of the metrics in the folder.
 
         if "memory_footprint (MiB)" not in self.exclude_list:
             # Add memory_footprint to dictionary corresponding to this benchmark

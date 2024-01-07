@@ -68,8 +68,6 @@ venv_spinup () {
         source $venv_name/bin/activate
         pip install memory_profiler
         pip install numpy
-        # TODO: installing tket because it is being imported through utils; possibly remove this dependency or restructure
-        # TODO: should switch to pytket instead of pytket-qiskit after rearranging utils and file structure
         
         if [ "$1" = "pytket" ]
         then
@@ -78,10 +76,10 @@ venv_spinup () {
         elif [ "$1" = "qiskit" ]
         then
             pip install qiskit==$2
-            # TODO: add back pytekt install if necessary
+            pip install pytket
         fi
     fi
-    # TODO: should I suppress the pip install outputs? And suppress warnings?
+
     cd ..
     python3 runner.py $1 $2 $3 $4 $5 $6 > memory_${1}_$2.txt
     deactivate
