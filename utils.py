@@ -6,6 +6,8 @@ from pytket.placement import NoiseAwarePlacement
 from pytket.qasm import circuit_from_qasm
 from pytket.qasm import circuit_to_qasm_str
 
+from qiskit.providers.fake_provider import *
+
 import statistics
 
 def initialize_tket_pass_manager(backend):
@@ -62,3 +64,99 @@ def initialize_tket_pass_manager(backend):
     )
     tket_pm = SequencePass(passlist)
     return tket_pm
+
+def choose_backend(backend):
+    if backend == "FakeWashingtonV2":
+        return FakeWashingtonV2()
+    elif backend == "FakeAlmadenV2":
+        return FakeAlmadenV2()
+    elif backend == "FakeArmonkV2":
+        return FakeArmonkV2()
+    elif backend == "FakeAthensV2":
+        return FakeAthensV2()
+    elif backend == "FakeAuckland":
+        return FakeAuckland()
+    elif backend == "FakeBelemV2":
+        return FakeBelemV2()
+    elif backend == "FakeBoeblingenV2":
+        return FakeBoeblingenV2()
+    elif backend == "FakeBogotaV2":
+        return FakeBogotaV2()
+    elif backend == "FakeBrooklynV2":
+        return FakeBrooklynV2()
+    elif backend == "FakeBurlingtonV2":
+        return FakeBurlingtonV2()
+    elif backend == "FakeCairoV2":
+        return FakeCairoV2()
+    elif backend == "FakeCambridgeV2":
+        return FakeCambridgeV2()
+    elif backend == "FakeCasablancaV2":
+        return FakeCasablancaV2()
+    elif backend == "FakeEssexV2":
+        return FakeEssexV2()
+    elif backend == "FakeGeneva":
+        return FakeGeneva()
+    elif backend == "FakeGuadalupeV2":
+        return FakeGuadalupeV2()
+    elif backend == "FakeHanoiV2":
+        return FakeHanoiV2()
+    elif backend == "FakeJakartaV2":
+        return FakeJakartaV2()
+    elif backend == "FakeJohannesburgV2":
+        return FakeJohannesburgV2()
+    elif backend == "FakeKolkataV2":
+        return FakeKolkataV2()
+    elif backend == "FakeLagosV2":
+        return FakeLagosV2()
+    elif backend == "FakeLimaV2":
+        return FakeLimaV2()
+    elif backend == "FakeLondonV2":
+        return FakeLondonV2()
+    elif backend == "FakeManhattanV2":
+        return FakeManhattanV2()
+    elif backend == "FakeManilaV2":
+        return FakeManilaV2()
+    elif backend == "FakeMelbourneV2":
+        return FakeMelbourneV2()
+    elif backend == "FakeMontrealV2":
+        return FakeMontrealV2()
+    elif backend == "FakeMumbaiV2":
+        return FakeMumbaiV2()
+    elif backend == "FakeNairobiV2":
+        return FakeNairobiV2()
+    elif backend == "FakeOslo":
+        return FakeOslo()
+    elif backend == "FakeOurenseV2":
+        return FakeOurenseV2()
+    elif backend == "FakeParisV2":
+        return FakeParisV2()
+    elif backend == "FakePerth":
+        return FakePerth()
+    elif backend == "FakePrague":
+        return FakePrague()
+    elif backend == "FakePoughkeepsieV2":
+        return FakePoughkeepsieV2()
+    elif backend == "FakeQuitoV2":
+        return FakeQuitoV2()
+    elif backend == "FakeRochesterV2":
+        return FakeRochesterV2()
+    elif backend == "FakeRomeV2":
+        return FakeRomeV2()
+    elif backend == "FakeSantiagoV2":
+        return FakeSantiagoV2()
+    elif backend == "FakeSherbrooke":
+        return FakeSherbrooke()
+    elif backend == "FakeSingaporeV2":
+        return FakeSingaporeV2()
+    elif backend == "FakeSydneyV2":
+        return FakeSydneyV2()
+    elif backend == "FakeTorontoV2":
+        return FakeTorontoV2()
+    elif backend == "FakeValenciaV2":
+        return FakeValenciaV2()
+    elif backend == "FakeVigoV2":
+        return FakeVigoV2()
+    elif backend == "FakeWashingtonV2":
+        return FakeWashingtonV2()
+    elif backend == "FakeYorktownV2":
+        return FakeYorktownV2()

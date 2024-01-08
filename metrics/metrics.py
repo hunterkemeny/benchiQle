@@ -1,8 +1,7 @@
 class Metrics:
 
     """
-    Metrics currently taken from QASMBench.
-    Would likely be better to call QASMBench for these functions in the future.
+    Depth metric currently taken from QASMBench.
     """
 
     def get_circuit_depth(self, benchmark):
